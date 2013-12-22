@@ -8,9 +8,6 @@ Example usage for package main:
 ./main -socket=/tmp/rmux.sock -tcpConnections="localhost:6379 localhost:6380 localhost:6381 localhost: 6382"
 ```
 Alternatively, if you want to make your own main package, the below code will listen on unix socket "/tmp/rmux.sock"
-
-With either of these, all Key-based commands will hash over ports 6379->6382
-Non key-based commands will failover to the default connection, which is localhost:6379
 ```
 package main
 
@@ -33,20 +30,17 @@ func main() {
 	rmuxInstance.Start()
 }
 ```
+With either of these, all Key-based commands will hash over ports 6379->6382
+Non key-based commands will failover to the default connection, which is localhost:6379
+
 
 Select will always return +OK, even if the server id is invalid
 Ping will always return +PONG
 Quit will always return +OK
 Del will only accept one argument, if multiplexing is enabled
 
-The following redis commands are not allowed, because they are lame (blocking):
-```
-blpop
-brpop
-brpoplpush
-```
 
-The following redis commands are not allowed, because they should be run with care on the actual redis server:
+The following redis commands are disabled, because they should generally be run on the actual redis server that you want information from:
 ```
 bgrewriteaof
 bgsave
@@ -79,6 +73,7 @@ unwatch
 discard
 eval
 bitop
+brpoplpush
 keys
 mget
 mset
@@ -99,17 +94,16 @@ zinterstore
 zunionstore
 ```
 
-The following redis pubsub commands are disabled:
+PubSub support is currently experimental, and only publish and subscribe are supported.
+Disabled:
 ```
 psubscribe
 pubsub
-publish
 punsubscribe
-subscribe
 unsubscribe
 ```
 
-Benchmarks with keep-alive off show rmux being ~4.5x as fast:
+Benchmarks with keep-alive off show rmux being ~4.5x as fast as a direct connection:
 ```
 $ redis-benchmark -q -n 1000 -c 50 -r 50 -k 0 
 WARNING: keepalive disabled, you probably need 'echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse' for Linux and 'sudo sysctl -w net.inet.tcp.msl=1000' for Mac OS X in order to use a lot of clients/requests
@@ -149,7 +143,7 @@ LRANGE_500 (first 450 elements): 3086.42 requests per second
 LRANGE_600 (first 600 elements): 2192.98 requests per second
 MSET (10 keys): 19607.84 requests per second
 ```
-Benchmarks with keep-alive on show a direct redis server being ~2.2x as fast:
+Benchmarks with keep-alive on show a direct connection to a redis server server being ~2.2x as fast:
 ```
 $ redis-benchmark -q -n 1000 -c 50 -r 50 -s /tmp/rmux.sock 
 PING_INLINE: 124999.99 requests per second
