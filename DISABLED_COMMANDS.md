@@ -2,6 +2,10 @@
 
 The following redis commands are disabled, because they should generally be run on the actual redis server that you want information from:
 ```
+multi
+watch
+exec
+unwatch
 bgrewriteaof
 bgsave
 client
@@ -26,10 +30,6 @@ time
 
 The following redis commands are disabled if multiplexing is enabled, because they have the potential to operate on multiple keys:
 ```
-multi
-watch
-exec
-unwatch
 discard
 eval
 bitop
