@@ -1,44 +1,58 @@
-rmux
-====
+# Rmux #
 
-A Redis Connection Pooler and Multiplexer, written in Go
+Rmux is a Redis connection pooler and multiplexer, written in Go.  
 
-Example usage for package main:
+## Installing ##
+
+- Install [Go](http://golang.org/doc/install) 
+- go get -u github.com/Pardot/rmux
+- go build -o /usr/local/bin/rmux github.com/Pardot/rmux/main
+
+
+## Usage ##
+
 ```
-./main -socket=/tmp/rmux.sock -tcpConnections="localhost:6379 localhost:6380 localhost:6381 localhost: 6382"
+Usage of rmux:
+  -host="localhost": The host to listen for incoming connections on
+  -localReadTimeout=0: Timeout to set locally (read)
+  -localTimeout=0: Timeout to set locally (read+write)
+  -localWriteTimeout=0: Timeout to set locally (write)
+  -maxProcesses=0: The number of processes to use.  If this is not defined, go's default is used.
+  -poolSize=50: The size of the connection pools to use
+  -port="6379": The port to listen for incoming connections on
+  -remoteConnectTimeout=0: Timeout to set for remote redises (connect)
+  -remoteReadTimeout=0: Timeout to set for remote redises (read)
+  -remoteTimeout=0: Timeout to set for remote redises (connect+read+write)
+  -remoteWriteTimeout=0: Timeout to set for remote redises (write)
+  -socket="": The socket to listen for incoming connections on.  If this is provided, host and port are ignored
+  -tcpConnections="localhost:6380 localhost:6381": TCP connections (destination redis servers) to multiplex over
+  -unixConnections="": Unix connections (destination redis servers) to multiplex over
 ```
-Alternatively, if you want to make your own main package, the below code will listen on unix socket "/tmp/rmux.sock"
+
+Localhost example:
 ```
-package main
-
-import (
-	"github.com/forcedotcom/rmux"
-)
-
-func main() {
-	rmuxInstance, err := rmux.NewRedisMultiplexer("unix", "/tmp/rmux.sock", 50)
-	rmuxInstance.AddConnection("tcp", "localhost:6379")
-	rmuxInstance.AddConnection("tcp", "localhost:6380")
-	rmuxInstance.AddConnection("tcp", "localhost:6381")
-	rmuxInstance.AddConnection("tcp", "localhost:6382")
-	rmuxInstance.PrimaryConnectionKey = "localhost:6379"
-	if err != nil {
-		println("Rmux Initialization Error", err.Error())
-		return
-	}
-	
-	rmuxInstance.Start()
-}
+redis-server --port 6379 &
+redis-server --port 6380 &
+redis-server --port 6381 &
+redis-server --port 6382 &
+rmux -socket=/tmp/rmux.sock -tcpConnections="localhost:6379 localhost:6380 localhost:6381 localhost:6382" &
+redis-cli -s /tmp/rmux.sock
 ```
-With either of these, all Key-based commands will hash over ports 6379->6382
-Non key-based commands will failover to the default connection, which is localhost:6379
+
+- All servers running production code should be running the same version of rmux, and should be connecting over the rmux socket
+- All key-based commands will hash over ports 6379->6382 on localhost
+- Select will always return +OK, even if the server id is invalid
+- Ping will always return +PONG
+- Quit will always return +OK
 
 
-Select will always return +OK, even if the server id is invalid
-Ping will always return +PONG
-Quit will always return +OK
-Del will only accept one argument, if multiplexing is enabled
 
+Production equivalent:
+```
+rmux -socket=/tmp/rmux.sock -tcpConnections="redis1:6379 redis1:6380 redis2:6379 redis2:6380"
+```
+
+### Disabled commands ###
 
 The following redis commands are disabled, because they should generally be run on the actual redis server that you want information from:
 ```
@@ -64,7 +78,7 @@ sync
 time
 ```
 
-The following redis commands are disabled if multiplexing is enabled:
+The following redis commands are disabled if multiplexing is enabled, because they have the potential to operate on multiple keys:
 ```
 multi
 watch
@@ -103,7 +117,9 @@ punsubscribe
 unsubscribe
 ```
 
-Benchmarks with keep-alive off show rmux being ~4.5x as fast as a direct connection:
+### Benchmarks ###
+
+Benchmarks with keep-alive off show rmux being ~4.5x as fast as a direct connection, under heavy load:
 ```
 $ redis-benchmark -q -n 1000 -c 50 -r 50 -k 0 
 WARNING: keepalive disabled, you probably need 'echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse' for Linux and 'sudo sysctl -w net.inet.tcp.msl=1000' for Mac OS X in order to use a lot of clients/requests
