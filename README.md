@@ -39,13 +39,22 @@ rmux -socket=/tmp/rmux.sock -tcpConnections="localhost:6379 localhost:6380 local
 redis-cli -s /tmp/rmux.sock
 ```
 
-- All servers running production code should be running the same version of rmux, and should be connecting over the rmux socket
-- All key-based commands will hash over ports 6379->6382 on localhost
+- In the above example, all key-based commands will hash over ports 6379->6382 on localhost
+- All servers running production code should be running the same version (and destination flags) of rmux, and should be connecting over the rmux socket
 - Select will always return +OK, even if the server id is invalid
 - Ping will always return +PONG
 - Quit will always return +OK
+- Info will return an abbreviated response:
 
-
+```
+rmux_version: 1.0
+go_version: go1.1.2
+process_id: 48885
+connected_clients: 0
+active_endpoints: 4
+total_endpoints: 4
+role: master
+```
 
 Production equivalent:
 ```
@@ -54,59 +63,7 @@ rmux -socket=/tmp/rmux.sock -tcpConnections="redis1:6379 redis1:6380 redis2:6379
 
 ### Disabled commands ###
 
-The following redis commands are disabled, because they should generally be run on the actual redis server that you want information from:
-```
-bgrewriteaof
-bgsave
-client
-config
-dbsize
-debug
-flushall
-flushdb
-lastsave
-move
-monitor
-migrate
-object
-randomkey
-save
-shutdown
-slaveof
-slowlog
-sync
-time
-```
-
-The following redis commands are disabled if multiplexing is enabled, because they have the potential to operate on multiple keys:
-```
-multi
-watch
-exec
-unwatch
-discard
-eval
-bitop
-brpoplpush
-keys
-mget
-mset
-msetnx
-rename
-renamenx
-rpoplpush
-script
-sdiff
-sdiffstore
-sinter
-sinterstore
-sinter
-smove
-sunion
-sunionstore
-zinterstore
-zunionstore
-```
+Redis commands that should only be run directly on a redis server are disabled.  Commands that operate on more than one key (or have the potential to) are disabled if multiplexing is enabled.
 
 PubSub support is currently experimental, and only publish and subscribe are supported.
 Disabled:
