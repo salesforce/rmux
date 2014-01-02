@@ -74,6 +74,8 @@ punsubscribe
 unsubscribe
 ```
 
+[Full list of disabled commands](DISABLED_COMMANDS.md)
+
 ### Benchmarks ###
 
 Benchmarks with keep-alive off show rmux being ~4.5x as fast as a direct connection, under heavy load:
