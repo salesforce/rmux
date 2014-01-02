@@ -1,3 +1,5 @@
+# Benchmarks #
+
 Benchmarks with keep-alive off (simulating a lamp stack) show rmux being ~4.5x as fast as a direct connection, under heavy load:
 ```
 $ redis-benchmark -q -n 1000 -c 50 -r 50 -k 0 
