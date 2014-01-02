@@ -40,6 +40,7 @@ redis-cli -s /tmp/rmux.sock
 ```
 
 - In the above example, all key-based commands will hash over ports 6379->6382 on localhost
+- If the server that a key hashes to is down, a backup server is automatically used (hashed based over the servers that are currently up)
 - All servers running production code should be running the same version (and destination flags) of rmux, and should be connecting over the rmux socket
 - Select will always return +OK, even if the server id is invalid
 - Ping will always return +PONG
@@ -83,3 +84,7 @@ Benchmarks with keep-alive off (simulating a lamp stack) show rmux being ~4.5x a
 Benchmarks with keep-alive on (simulating how a java server would operate) show a direct connection to a redis server server being ~2.2x as fast:
 
 [Benchmark results here](BENCHMARKS.md)
+
+Rmux is currently used in production by Pardot.  We have seen a reduction in our upper and 90th percentile connection and command times.  The 90th percentile times are slightly improved, and the upper times are drastically improved.
+
+[Production graphite data is here](PRODUCTION_BENCHMARKS.md)
