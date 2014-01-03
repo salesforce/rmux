@@ -2,7 +2,7 @@
 
 Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux should be used for LAMP stacks, or other short-lived process applications, with high request volume.
 
-# Motivation #
+## Motivation ##
 
 At Pardot, we use redis (among other things) for our cache layer.  Early on, we saw occasional latency spikes.  After tuning our redis servers' net.ipv4.tcp.. settings , everything settled down--but as we grew, we began to see issues pop up again.
 
