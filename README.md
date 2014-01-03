@@ -1,6 +1,6 @@
 # Rmux #
 
-Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux should be used for LAMP stacks, or other short-lived process applications, with high request volume.
+Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux is meant to be used for LAMP stacks, or other short-lived process applications, with high request volume.
 
 ## Motivation ##
 
