@@ -1,6 +1,18 @@
 # Rmux #
 
-Rmux is a Redis connection pooler and multiplexer, written in Go.  
+Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux should be used for LAMP stacks, or other short-lived process applications, with high request volume.
+
+# Motivation #
+
+At Pardot, we use redis (among other things) for our cache layer.  Early on, we saw occasional latency spikes.  After tuning our redis servers' net.ipv4.tcp.. settings , everything settled down--but as we grew, we began to see issues pop up again.
+
+While our Memory usage remained remarkably low, we saw occasional CPU spikes during peak access times.  Adding more redis boxes, with key-based hashing in our application, surprisingly did not help.  Pardot application severs run on a LAMP stack, which means that each request has to create its own connection to Redis.  Since each application request hits multiple cache keys, destination redis boxes were receiving the same number of connections, but less commands.
+
+Since the issue seemed to be purely connection rates, and not command count, we started looking for a connection pooler.  After finding none that were designed for redis, we built our own.  Along the way, we built in key-based multiplexing, with a failover strategy in place.
+
+With rmux, our application servers all connect to a local unix socket, instead of the target destination redis port.  Rmux then parses the incomming request, reads the first key, and hashes it to find which server to execute the command on.  If a server is down, the command will instead be sent to a backup-hashed server.  Since rmux understands the redis protocol, it also handles connection pooling//recycling for you, and handles server id management for the connections.
+
+When rmux hit production, we saw immediate gains in our 90th-percentile and upper-bound response times.
 
 ## Installing ##
 
