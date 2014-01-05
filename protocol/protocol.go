@@ -302,22 +302,22 @@ func ignoreBulkMessage(firstLine []byte, source *bufio.Reader) (err error) {
 
 	char, err := source.ReadByte()
 	if err != nil {
-		Debug("copyBulkMessage: Error received from readByte: %s", err)
+		Debug("ignoreBulkMessage: Error received from readByte: %s", err)
 		return
 	}
 	if char != '\r' {
-		Debug("copyBulkMessage: Missing carriage-return character", err)
+		Debug("ignoreBulkMessage: Missing carriage-return character", err)
 		err = ERROR_BAD_BULK_FORMAT
 		return
 	}
 
 	char, err = source.ReadByte()
 	if err != nil {
-		Debug("copyBulkMessage: Error received from readByte: %s", err)
+		Debug("ignoreBulkMessage: Error received from readByte: %s", err)
 		return
 	}
 	if char != '\n' {
-		Debug("copyBulkMessage: Missing newline character", err)
+		Debug("ignoreBulkMessage: Missing newline character", err)
 		err = ERROR_BAD_BULK_FORMAT
 		return
 	}
@@ -439,7 +439,7 @@ func copyBulkMessage(firstLine []byte, destination *bufio.Writer, source *bufio.
 		return
 	}
 
-	err = destination.Flush()
+//	err = destination.Flush()
 	if err != nil {
 		Debug("copyBulkMessage: Error received from Flush: %s", err)
 		return

@@ -19,6 +19,8 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"runtime/pprof"
+	"os"
 )
 
 var host = flag.String("host", "localhost", "The host to listen for incoming connections on")
@@ -35,9 +37,19 @@ var remoteTimeout = flag.Duration("remoteTimeout", 0, "Timeout to set for remote
 var remoteReadTimeout = flag.Duration("remoteReadTimeout", 0, "Timeout to set for remote redises (read)")
 var remoteWriteTimeout = flag.Duration("remoteWriteTimeout", 0, "Timeout to set for remote redises (write)")
 var remoteConnectTimeout = flag.Duration("remoteConnectTimeout", 0, "Timeout to set for remote redises (connect)")
+var cpuProfile = flag.String("cpuProfile", "", "Direct CPU Profile to target file")
 
 func main() {
 	flag.Parse()
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err == nil {
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
+	}
+	
 	if *maxProcesses > 0 {
 		fmt.Printf("Max processes increased to: %d from: %d\r\n", *maxProcesses, runtime.GOMAXPROCS(*maxProcesses))
 	}
