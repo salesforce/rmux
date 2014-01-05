@@ -1,6 +1,18 @@
 # Rmux #
 
-Rmux is a Redis connection pooler and multiplexer, written in Go.  
+Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux is meant to be used for LAMP stacks, or other short-lived process applications, with high request volume.  It should be run as a client, on every server that connects to redis--to reduce the total inbound connection count to the redis servers, while handle consistent multiplexing.
+
+## Motivation ##
+
+At Pardot, we use redis (among other things) for our cache layer.  Early on, we saw occasional latency spikes.  After tuning our redis servers' net.ipv4.tcp.. settings , everything settled down--but as we grew, we began to see issues pop up again.
+
+While our Memory usage remained remarkably low, we saw occasional CPU spikes during peak access times.  Adding more redis boxes, with key-based hashing in our application, surprisingly did not help.  Pardot application severs run on a LAMP stack, which means that each request has to create its own connection to Redis.  Since each application request hits multiple cache keys, destination redis boxes were receiving the same number of connections, but less commands.
+
+Since the issue seemed to be purely connection rates, and not command count, we started looking for a connection pooler.  After finding none that were designed for redis, we built our own.  Along the way, we built in key-based multiplexing, with a failover strategy in place.
+
+With rmux, our application servers all connect to a local unix socket, instead of the target destination redis port.  Rmux then parses the incomming request, reads the first key, and hashes it to find which server to execute the command on.  If a server is down, the command will instead be sent to a backup-hashed server.  Since rmux understands the redis protocol, it also handles connection pooling//recycling for you, and handles server id management for the connections.
+
+When rmux hit production, we saw immediate gains in our 90th-percentile and upper-bound response times.
 
 ## Installing ##
 
@@ -40,6 +52,7 @@ redis-cli -s /tmp/rmux.sock
 ```
 
 - In the above example, all key-based commands will hash over ports 6379->6382 on localhost
+- If the server that a key hashes to is down, a backup server is automatically used (hashed based over the servers that are currently up)
 - All servers running production code should be running the same version (and destination flags) of rmux, and should be connecting over the rmux socket
 - Select will always return +OK, even if the server id is invalid
 - Ping will always return +PONG
@@ -83,3 +96,7 @@ Benchmarks with keep-alive off (simulating a lamp stack) show rmux being ~4.5x a
 Benchmarks with keep-alive on (simulating how a java server would operate) show a direct connection to a redis server server being ~2.2x as fast:
 
 [Benchmark results here](BENCHMARKS.md)
+
+Rmux is currently used in production by Pardot.  We have seen a reduction in our upper and 90th percentile connection and command times.  The 90th percentile times are slightly improved, and the upper times are drastically improved.
+
+[Production graphite data is here](PRODUCTION_BENCHMARKS.md)
