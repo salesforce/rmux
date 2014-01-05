@@ -91,9 +91,9 @@ unsubscribe
 
 ### Benchmarks ###
 
-Benchmarks with keep-alive off (simulating a lamp stack) show rmux being ~4.5x as fast as a direct connection, under heavy load:
+Benchmarks with keep-alive off (simulating a lamp stack) show rmux being ~10x as fast as a direct connection, under heavy load.
 
-Benchmarks with keep-alive on (simulating how a java server would operate) show a direct connection to a redis server server being ~2.2x as fast:
+Benchmarks with keep-alive on (simulating how a java server would operate) show rmux being ~70% as fast as a direct connection.
 
 [Benchmark results here](BENCHMARKS.md)
 
