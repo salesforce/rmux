@@ -199,8 +199,8 @@ func (myRedisMultiplexer *RedisMultiplexer) initializeClient(localConnection net
 	defer func() {
 		atomic.AddInt32(&myRedisMultiplexer.connectionCount, -1)
 	}()
-	//Add the connection to our internal list
 	atomic.AddInt32(&myRedisMultiplexer.connectionCount, 1)
+	//Add the connection to our internal list
 	myClient := NewClient(localConnection, myRedisMultiplexer.ClientReadTimeout, myRedisMultiplexer.ClientWriteTimeout)
 	defer func() {
 		r := recover()
@@ -305,13 +305,12 @@ func (myRedisMultiplexer *RedisMultiplexer) GetConnectionKey(argumentCount int, 
 
 	//The bernstein hash is one of the fastest key-distribution algorithms out there, for small character keys
 	//An alternate (but slower) algorithm would be to use go's built-in hash/fnv, if this proves insufficient
-	primaryTarget := 0
-	secondaryTarget := 0
+	var hash uint32 = 0
 	for _, char := range firstArgument {
-		//33 is the magic number.
-		primaryTarget = (primaryTarget*33 + int(char)) % len(myRedisMultiplexer.ConnectionCluster)
-		secondaryTarget = (secondaryTarget*33 + int(char)) % myRedisMultiplexer.activeConnectionCount
+		hash = hash << 5 + hash + uint32(char)
 	}
+	primaryTarget := int(hash) % len(myRedisMultiplexer.ConnectionCluster)
+	secondaryTarget := int(hash) % myRedisMultiplexer.activeConnectionCount
 
 	protocol.Debug("We are going to hash this with %d or %d\r\n", primaryTarget, secondaryTarget)
 
