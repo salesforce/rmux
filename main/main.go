@@ -90,7 +90,7 @@ func main() {
 		}
 	}
 
-	if rmuxInstance.PrimaryConnectionKey == "" {
+	if rmuxInstance.PrimaryConnectionPool == nil {
 		fmt.Printf("You must have at least one connection defined\r\n")
 		return
 	}

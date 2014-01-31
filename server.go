@@ -39,7 +39,7 @@ var (
 //If more than one connection pool is given multi-key operations are blocked
 type RedisMultiplexer struct {
 	//hashmap of [connection endpoint] -> connectionPools
-	ConnectionCluster map[string]*connection.ConnectionPool
+	ConnectionCluster []*connection.ConnectionPool
 	//hashmap of [subscription names] -> subscriptions
 	SubscriptionCluster map[string]*Subscription
 	//The net.listener for our server
@@ -47,7 +47,7 @@ type RedisMultiplexer struct {
 	//The amount of connections to store, in each of our connectionpools
 	PoolSize int
 	//The primary connection key to use.  If we're not operating on a key-based operation, it will go here
-	PrimaryConnectionKey string
+	PrimaryConnectionPool *connection.ConnectionPool
 	//And overridable connect timeout.  Defaults to EXTERN_CONNECT_TIMEOUT
 	EndpointConnectTimeout time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
@@ -97,7 +97,7 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 		println("listen error", err.Error())
 		return nil, err
 	}
-	newRedisMultiplexer.ConnectionCluster = make(map[string]*connection.ConnectionPool)
+	newRedisMultiplexer.ConnectionCluster = make([]*connection.ConnectionPool, 0)
 	newRedisMultiplexer.SubscriptionCluster = make(map[string]*Subscription)
 	newRedisMultiplexer.PoolSize = poolSize
 	newRedisMultiplexer.active = true
@@ -117,9 +117,9 @@ func (myRedisMultiplexer *RedisMultiplexer) AddConnection(remoteProtocol, remote
 	connectionCluster.ConnectTimeout = myRedisMultiplexer.EndpointConnectTimeout
 	connectionCluster.ReadTimeout = myRedisMultiplexer.EndpointReadTimeout
 	connectionCluster.WriteTimeout = myRedisMultiplexer.EndpointWriteTimeout
-	myRedisMultiplexer.ConnectionCluster[remoteEndpoint] = connectionCluster
+	myRedisMultiplexer.ConnectionCluster = append(myRedisMultiplexer.ConnectionCluster, connectionCluster)
 	if len(myRedisMultiplexer.ConnectionCluster) == 1 {
-		myRedisMultiplexer.PrimaryConnectionKey = remoteEndpoint
+		myRedisMultiplexer.PrimaryConnectionPool = connectionCluster
 	} else {
 		myRedisMultiplexer.multiplexing = true
 	}
@@ -144,8 +144,8 @@ func (myRedisMultiplexer *RedisMultiplexer) refreshSubscriptions() {
 			delete(myRedisMultiplexer.SubscriptionCluster, channelName)
 			continue
 		}
-		connectionKey := myRedisMultiplexer.GetConnectionKey(2, []byte(channelName))
-		mySubscription.UpdateConnection(connectionKey, myRedisMultiplexer.ConnectionCluster[connectionKey])
+		connectionPool := myRedisMultiplexer.GetConnectionPool(2, []byte(channelName))
+		mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
 	}
 	return
 }
@@ -228,7 +228,7 @@ func (myRedisMultiplexer *RedisMultiplexer) sendMultiplexInfo(myClient *Client) 
 func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Client) {
 	var err error
 	var firstLine []byte
-	var connectionKey string
+	var connectionPool *connection.ConnectionPool
 	for myRedisMultiplexer.active && myClient.Active {
 		firstLine, _, err = myClient.ReadWriter.ReadLine()
 		protocol.Debug("I read %s\r\n", firstLine)
@@ -282,10 +282,10 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 		}
 
 		startTime := time.Now()
-		connectionKey = myRedisMultiplexer.GetConnectionKey(myClient.argumentCount, myClient.firstArgument)
+		connectionPool = myRedisMultiplexer.GetConnectionPool(myClient.argumentCount, myClient.firstArgument)
 		protocol.Debug("Connection time: %s\r\n", time.Since(startTime))
 
-		err = myClient.HandleRequest(myRedisMultiplexer.ConnectionCluster[connectionKey], firstLine)
+		err = myClient.HandleRequest(connectionPool, firstLine)
 		if err != nil {
 			protocol.Debug("Error received from HandleRequest call: %s\r\n", err)
 		}
@@ -296,10 +296,9 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 //Gets the connectionKey, for a to-be-multiplexed command
 //Uses the bernstein hash, which is one of the fastest key-distribution algorithms out there
 //Also calculates a failover connectionKey, incase the primary is down
-func (myRedisMultiplexer *RedisMultiplexer) GetConnectionKey(argumentCount int, firstArgument []byte) (connectionKey string) {
+func (myRedisMultiplexer *RedisMultiplexer) GetConnectionPool(argumentCount int, firstArgument []byte) (connectionPool *connection.ConnectionPool) {
+	connectionPool = myRedisMultiplexer.PrimaryConnectionPool
 	if argumentCount < 2 {
-		//flush remaining input buffer
-		connectionKey = myRedisMultiplexer.PrimaryConnectionKey
 		return
 	}
 
@@ -309,29 +308,26 @@ func (myRedisMultiplexer *RedisMultiplexer) GetConnectionKey(argumentCount int, 
 	for _, char := range firstArgument {
 		hash = hash << 5 + hash + uint32(char)
 	}
-	primaryTarget := int(hash) % len(myRedisMultiplexer.ConnectionCluster)
-	secondaryTarget := int(hash) % myRedisMultiplexer.activeConnectionCount
+	target := int(hash) % len(myRedisMultiplexer.ConnectionCluster)
+	protocol.Debug("We are going to hash this with %d or %d\r\n", target)
 
-	protocol.Debug("We are going to hash this with %d or %d\r\n", primaryTarget, secondaryTarget)
+	if myRedisMultiplexer.ConnectionCluster[target].IsConnected {
+		connectionPool = myRedisMultiplexer.ConnectionCluster[target]
+		return
+	}
+	
+	target = int(hash) % myRedisMultiplexer.activeConnectionCount
+	protocol.Debug("No, we are going to hash this with %d or %d\r\n", target)
 
-	for index, connectionCluster := range myRedisMultiplexer.ConnectionCluster {
-		if primaryTarget == 0 && connectionCluster.IsConnected {
-			connectionKey = index
-			return
-		}
-		primaryTarget--
+	for _, connectionCluster := range myRedisMultiplexer.ConnectionCluster {
 		if connectionCluster.IsConnected {
-			if secondaryTarget == 0 {
-				connectionKey = index
+			if target == 0 {
+				connectionPool = connectionCluster
 			}
-			secondaryTarget--
+			target--
 		}
 	}
-
-	if connectionKey == "" {
-		connectionKey = myRedisMultiplexer.PrimaryConnectionKey
-	}
-
+	
 	return
 }
 
@@ -346,7 +342,7 @@ func (myRedisMultiplexer *RedisMultiplexer) GetSubscription(channelName string) 
 		myRedisMultiplexer.SubscriptionCluster[channelName] = mySubscription
 		go mySubscription.BroadcastMessages()
 	}
-	connectionKey := myRedisMultiplexer.GetConnectionKey(2, []byte(channelName))
-	mySubscription.UpdateConnection(connectionKey, myRedisMultiplexer.ConnectionCluster[connectionKey])
+	connectionPool := myRedisMultiplexer.GetConnectionPool(2, []byte(channelName))
+	mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
 	return
 }
