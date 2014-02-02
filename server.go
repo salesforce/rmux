@@ -38,6 +38,7 @@ var (
 //Listens on a specified socket or port, and assigns out queries to any number of connection pools
 //If more than one connection pool is given multi-key operations are blocked
 type RedisMultiplexer struct {
+	HashRing *connection.HashRing
 	//hashmap of [connection endpoint] -> connectionPools
 	ConnectionCluster []*connection.ConnectionPool
 	//hashmap of [subscription names] -> subscriptions
@@ -144,7 +145,7 @@ func (myRedisMultiplexer *RedisMultiplexer) refreshSubscriptions() {
 			delete(myRedisMultiplexer.SubscriptionCluster, channelName)
 			continue
 		}
-		connectionPool := myRedisMultiplexer.GetConnectionPool(2, []byte(channelName))
+		connectionPool := myRedisMultiplexer.HashRing.GetConnectionPool(2, []byte(channelName))
 		mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
 	}
 	return
@@ -173,9 +174,10 @@ func (myRedisMultiplexer *RedisMultiplexer) generateMultiplexInfo() {
 }
 
 //Called when a rmux server is ready to begin accepting connections
-func (myRedisMultiplexer *RedisMultiplexer) Start() {
-	if len(myRedisMultiplexer.ConnectionCluster) == 0 {
-		println("No connections defined, aborting")
+func (myRedisMultiplexer *RedisMultiplexer) Start() (err error) {
+	myRedisMultiplexer.HashRing, err = connection.NewHashRing(myRedisMultiplexer.ConnectionCluster)
+	if err != nil {
+		println(err)
 		return
 	}
 
@@ -192,6 +194,7 @@ func (myRedisMultiplexer *RedisMultiplexer) Start() {
 		go myRedisMultiplexer.initializeClient(fd)
 	}
 	time.Sleep(100 * time.Millisecond)
+	return
 }
 
 //Initializes a client's connection to our server.  Sets up our disconnect hooks and then passes the client off for request handling
@@ -282,7 +285,7 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 		}
 
 		startTime := time.Now()
-		connectionPool = myRedisMultiplexer.GetConnectionPool(myClient.argumentCount, myClient.firstArgument)
+		connectionPool = myRedisMultiplexer.HashRing.GetConnectionPool(myClient.argumentCount, myClient.firstArgument)
 		protocol.Debug("Connection time: %s\r\n", time.Since(startTime))
 
 		err = myClient.HandleRequest(connectionPool, firstLine)
@@ -291,44 +294,6 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 		}
 		protocol.Debug("Total request time: %s\r\n", time.Since(totalTime))
 	}
-}
-
-//Gets the connectionKey, for a to-be-multiplexed command
-//Uses the bernstein hash, which is one of the fastest key-distribution algorithms out there
-//Also calculates a failover connectionKey, incase the primary is down
-func (myRedisMultiplexer *RedisMultiplexer) GetConnectionPool(argumentCount int, firstArgument []byte) (connectionPool *connection.ConnectionPool) {
-	connectionPool = myRedisMultiplexer.PrimaryConnectionPool
-	if argumentCount < 2 {
-		return
-	}
-
-	//The bernstein hash is one of the fastest key-distribution algorithms out there, for small character keys
-	//An alternate (but slower) algorithm would be to use go's built-in hash/fnv, if this proves insufficient
-	var hash uint32 = 0
-	for _, char := range firstArgument {
-		hash = hash << 5 + hash + uint32(char)
-	}
-	target := int(hash) % len(myRedisMultiplexer.ConnectionCluster)
-	protocol.Debug("We are going to hash this with %d or %d\r\n", target)
-
-	if myRedisMultiplexer.ConnectionCluster[target].IsConnected {
-		connectionPool = myRedisMultiplexer.ConnectionCluster[target]
-		return
-	}
-	
-	target = int(hash) % myRedisMultiplexer.activeConnectionCount
-	protocol.Debug("No, we are going to hash this with %d or %d\r\n", target)
-
-	for _, connectionCluster := range myRedisMultiplexer.ConnectionCluster {
-		if connectionCluster.IsConnected {
-			if target == 0 {
-				connectionPool = connectionCluster
-			}
-			target--
-		}
-	}
-	
-	return
 }
 
 //Gets an active subscription for our client to connect to
@@ -342,7 +307,7 @@ func (myRedisMultiplexer *RedisMultiplexer) GetSubscription(channelName string) 
 		myRedisMultiplexer.SubscriptionCluster[channelName] = mySubscription
 		go mySubscription.BroadcastMessages()
 	}
-	connectionPool := myRedisMultiplexer.GetConnectionPool(2, []byte(channelName))
+	connectionPool := myRedisMultiplexer.HashRing.GetConnectionPool(2, []byte(channelName))
 	mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
 	return
 }
