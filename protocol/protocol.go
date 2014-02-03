@@ -62,13 +62,16 @@ var (
 		"client":       true,
 		"config":       true,
 		"dbsize":       true,
+		"discard":     true,
 		"debug":        true,
+		"exec":        true,
 		"flushall":     true,
 		"flushdb":      true,
 		"lastsave":     true,
 		"move":         true,
 		"monitor":      true,
 		"migrate":      true,
+		"multi":       true,
 		"object":       true,
 		"punsubscribe": true,
 		"psubscribe":   true,
@@ -81,16 +84,13 @@ var (
 		"sync":         true,
 		"time":         true,
 		"unsubscribe":  true, // TODO, build in unsubscribe support to pubsub handlers
+		"unwatch":     true,
+		"watch":       true,
 	}
 
 	//These functions will only work if multiplexing is disabled.
 	//It would be rather worthless to watch on one server, multi on another, and increment on a third
 	SINGLE_DB_FUNCTIONS = map[string]bool{
-		"exec":        true,
-		"multi":       true,
-		"watch":       true,
-		"unwatch":     true,
-		"discard":     true,
 		"bitop":       true,
 		"brpoplpush":  true,
 		"eval":        true,
@@ -119,6 +119,136 @@ var (
 	}
 )
 
+func IsSupportedFunction(command [20]byte, commandLength int, isMultiplexing, isMultipleArgument bool) (bool) {
+	if command[0] == 'd' {
+		//*del is only supported if we're not multiplexing, or there's only one argument
+		if command[2] == 'l' && isMultipleArgument {
+			return false
+		}
+		//supported: decr, decrby, del, dump
+		//unsupported: debug, dbsize, discard
+		return (command[1] == 'e' || command[1] == 'u') && command[2] != 'b'
+	} else if command[0] == 'g' {
+		//supported: get, getbit, getrange, getset
+		return true
+	} else if command[0] == 's' {
+		//supported: select, set, setbit, setex, setnx, setrange, sort, spop, srandmember, srem, strlen
+		if command[1] == 'e' || command[1] == 'o' || command[1] == 'p' || command[1] == 'r' || command[1] == 't' {
+			return true
+		}
+		//supported: sadd
+		//unsupported: save
+		if command[1] == 'a' {
+			return command[2] == 'd'
+		}
+		//unsupported: shutdown. slaveof, slowlog, sync
+		if command[1] == 'a' || command[1] == 'h' || command[1] == 'l' || command[1] == 'y' {
+			return false
+		}
+		//supported if multiplexing is disabled: script, sdiff, sdiffstore, sinter, sinterstore, smove, sunion, sunionstore
+		if isMultiplexing {
+			return true
+		}
+		//supported: scard
+		if command[1] == 'c' && command[2] != 'a' {
+			return true
+		} else if command[1] == 'i' && command[2] == 's' {
+			return true
+		} else if command[1] == 'm' && command[2] == 'e' {
+			return true
+		} else if command[1] == 'u' && command[2] == 'b' {
+			return true
+		}
+	} else if command[0] == 'h' {
+		//supported: hdel, hexists, hget, hgetall, hincrby, hincrbyfloat, hkeys, hlen, hmget, hmset, hsetnx, hvals
+		return true
+	} else if command[0] == 'i' {
+		//supported: incr, incrby, incrbyfloat
+		return true
+	} else if command[0] == 'l' {
+		//unsupported: lastsave
+		//supported: lindex, linsert, llen, lpop, lpush, lpushx, lrange, lrem, lset, ltrim
+		return command[1] != 'a'
+	} else if command[0] == 'z' {
+		//supported if multiplexing is disabled: zinterstore, zunionstore
+		//supported: everything else
+		if !isMultiplexing {
+			return true
+		}
+		//supported if multiplexing is disabled: zinterstore, zunionstore
+		if command[1] == 'i' && command[3] == 't' || command[1] == 'u' {
+			return false
+		}
+	} else if command[0] == 'p' {
+		//supported: persist, pexpire, pexpireat, ping, psetex, pttl, publish
+		//unsupported: punsubscribe, psubscribe, pubsub
+		return command[1] != 'u' || (commandLength == 7 && !isMultipleArgument)
+	} else if command[0] == 'q' {
+		return true
+	} else if command[0] == 'r' {
+		//supported: rpop, rpush, rpushx
+		//supported if multiplexing is disabled: rename, renamenx, rpoplpush
+		//unsupported: randomkey, restore
+		if command[1] == 'p' &&  commandLength < 8 {
+			return true
+		} else if !isMultiplexing {
+			return command[1] != 'a' && command[2] != 's'
+		}
+		return false
+	} else if command[0] == 't' {
+		//supported: time, ttl, type
+		return true
+	} else if command[0] == 'u' {
+		//unsupported: unsubscribe (TODO), unwatch
+		return false
+	} else if command[0] == 'w' {
+		//unsupported: watch
+		return false
+	} else if command[0] == 'a' {
+		//supported: append
+		//unsupported: auth
+		return command[1] == 'p'
+	} else if command[0] == 'b' {
+		//supported: bitcount
+		if commandLength == 8 {
+			return true
+		}
+		//unsupported: bgsave, bgwriteaof
+		if command[1] == 'g' {
+			return false;
+		}
+		//supported if not multiplexing: bitop, brpop, blpop, brpoplpush
+		return !isMultiplexing
+	} else if command[0] == 'c' {
+		//unsupported: client, config
+		return false
+	} else if command[0] == 'e' {
+		//unsupported: exec
+		if command[2] == 'e' {
+			return false
+		}
+		//supported: echo, exists, expire, expireat
+		//supported if not multiplexing: eval, evalsha
+		return command[1] != 'v' || !isMultiplexing
+	} else if command[0] == 'f' {
+		//unsupported: flushall, flushdb
+		return false
+	} else if command[0] == 'k' {
+		//supported if not multiplexing: keys
+		return !isMultiplexing
+	} else if command[0] == 'm' {
+		//supported if not multiplexing: mget, mset, msetnx
+		//unsupported: move, monitor, migrate, multi
+		if isMultiplexing {
+			return false
+		}
+		return command[1] == 'g' || command[1] == 's'
+	} else if command[0] == 'o' {
+		return false
+	}
+	return false
+}
+
 //Parses a string into an int.
 //Differs from atoi in that this only parses positive ints--hex, octal, and negatives are not allowed
 //Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
@@ -142,7 +272,7 @@ func ParseInt(response []byte) (length int, err error) {
 
 //Inspects the incoming payload, and returns the command, and first argument for that command if there is one.
 //If the packet is not in a valid multibulk format, ERROR_MULTIBULK_FORMAT_REQUIRED is returned
-func GetCommand(source *bufio.Reader) (command, firstArgument []byte, err error) {
+func GetCommand(source *bufio.Reader, command, firstArgument []byte) (commandLength, argumentLength int, err error) {
 	var nextLine, messageLength int
 	//Peek at everything that we can look at
 	contents, err := source.Peek(source.Buffered())
@@ -162,7 +292,7 @@ func GetCommand(source *bufio.Reader) (command, firstArgument []byte, err error)
 	}
 
 	//Snag the length of the bulk-message that follows
-	messageLength, err = ParseInt(contents[1:nextLine])
+	commandLength, err = ParseInt(contents[1:nextLine])
 	if err != nil {
 		Debug("GetCommand: Error received from command's ParseInt: %s\r\n", err)
 		return
@@ -170,33 +300,33 @@ func GetCommand(source *bufio.Reader) (command, firstArgument []byte, err error)
 
 	//add 2 for newline.
 	nextLine = nextLine + 2
-	if nextLine+messageLength+2 > len(contents) {
+	if nextLine+commandLength+2 > len(contents) {
 		Debug("GetCommand: Message is not as long as the bulk header suggests\r\n")
 		err = ERROR_MULTIBULK_FORMAT_REQUIRED
 		return
 	}
 
 	//and then snag the command out of the source
-	command = contents[nextLine : nextLine+messageLength]
+	copy(command, contents[nextLine : nextLine + commandLength])
 	if DEBUG {
-		Debug("GetCommand: We peeked at %d bytes for command: %s\r\n", messageLength, command)
+		Debug("GetCommand: We peeked at %d bytes for command: %s\r\n", commandLength, command)
 	}
 
-	for index, value := range command {
+	for index := 0; index < commandLength; index++ {
 		//if we have a capital value
-		if value <= 'Z' {
+		if command[index] <= 'Z' {
 			//lowercaseize it
-			command[index] = value + 32
+			command[index] += 32
 		}
 	}
 
 	//Short-circuit if there is no argument
-	if nextLine+messageLength+2 == len(contents) {
+	if nextLine+commandLength+2 == len(contents) {
 		return
 	}
 
 	//Find the start and end of the next bulk-message header
-	messageLength = nextLine + messageLength + 2
+	messageLength = nextLine + commandLength + 2
 	nextLine = bytes.IndexByte(contents[messageLength:], '\r')
 	//If there is no newline, this invalid
 	if nextLine == -1 {
@@ -207,7 +337,7 @@ func GetCommand(source *bufio.Reader) (command, firstArgument []byte, err error)
 	nextLine = nextLine + messageLength
 
 	//Find the first argument's length
-	messageLength, err = ParseInt(contents[messageLength+1 : nextLine])
+	argumentLength, err = ParseInt(contents[messageLength+1 : nextLine])
 	if err != nil {
 		Debug("GetCommand: Error received from argument's ParseInt: %s", err)
 		return
@@ -215,16 +345,16 @@ func GetCommand(source *bufio.Reader) (command, firstArgument []byte, err error)
 	nextLine = nextLine + 2
 
 	//If we have less source than we expect, this is also invalid
-	if nextLine+messageLength+2 > len(contents) {
+	if nextLine+argumentLength+2 > len(contents) {
 		err = ERROR_MULTIBULK_FORMAT_REQUIRED
 		Debug("GetCommand: Argument is not as long as the bulk header suggests")
 		return
 	}
 
 	//And then read that out of the source as well
-	firstArgument = contents[nextLine : nextLine+messageLength]
+	copy(firstArgument, contents[nextLine : nextLine+argumentLength])
 	if DEBUG {
-		Debug("GetCommand: We peeked at %d bytes for argument: %s\r\n", messageLength, firstArgument)
+		Debug("GetCommand: We peeked at %d bytes for argument: %s\r\n", argumentLength, firstArgument)
 	}
 	return
 }

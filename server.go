@@ -258,7 +258,7 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 			continue
 		}
 		//If we have an INFO command, and multiplexing is enabled..
-		if bytes.Equal(myClient.command, protocol.INFO_COMMAND) && myRedisMultiplexer.multiplexing {
+		if bytes.Equal(myClient.command[0:4], protocol.INFO_COMMAND) && myRedisMultiplexer.multiplexing {
 			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
 			err = myRedisMultiplexer.sendMultiplexInfo(myClient)
 			if err != nil {
@@ -269,7 +269,7 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 		}
 
 		//If we have a SUBSCRIBE command, hook it up...
-		if bytes.Equal(myClient.command, protocol.SUBSCRIBE_COMMAND) {
+		if bytes.Equal(myClient.command[0:4], protocol.SUBSCRIBE_COMMAND) {
 			protocol.Debug("Received subscribe request on channel: %s\r\n", myClient.stringArgument)
 			subscription := myRedisMultiplexer.GetSubscription(myClient.stringArgument)
 			protocol.Debug("Got subscription\r\n")
@@ -285,7 +285,7 @@ func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Clien
 		}
 
 		startTime := time.Now()
-		connectionPool = myRedisMultiplexer.HashRing.GetConnectionPool(myClient.argumentCount, myClient.firstArgument)
+		connectionPool = myRedisMultiplexer.HashRing.GetConnectionPool(myClient.argumentCount, myClient.firstArgumentSlice[0:myClient.argumentLength])
 		protocol.Debug("Connection time: %s\r\n", time.Since(startTime))
 
 		err = myClient.HandleRequest(connectionPool, firstLine)

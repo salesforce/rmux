@@ -68,11 +68,12 @@ func (test *ProtocolTester) verifyGetCommandError(badCommand string) {
 	//If this looks hacky, that's because it is
 	//bufio.NewReader doesn't call fill() upon init, so we have to force it
 	buf.Peek(1)
-	_, _, err := GetCommand(buf)
+	var commandBuffer []byte
+	_, _, err := GetCommand(buf, commandBuffer, commandBuffer)
 	if err == nil {
-		test.Fatal("GetCommand did not fatal on", badCommand)
+		test.Fatal("GetCommand did not err on", badCommand)
 	} else {
-		test.Log("GetCommand fataled on", badCommand)
+		test.Log("GetCommand erred on", badCommand)
 	}
 }
 
@@ -89,9 +90,10 @@ func (test *ProtocolTester) verifyGetCommandResponse(validMessage, expectedComma
 	//If this looks hacky, that's because it is
 	//bufio.NewReader doesn't call fill() upon init, so we have to force it
 	buf.Peek(1)
-	command, argument, _ := GetCommand(buf)
-	test.compareString(string(command), expectedCommand)
-	test.compareString(string(argument), expectedArgument)
+	var command, argument [20]byte
+	commandLength, argumentLength, _ := GetCommand(buf, command[:], argument[:])
+	test.compareString(string(command[:commandLength]), expectedCommand)
+	test.compareString(string(argument[:argumentLength]), expectedArgument)
 }
 
 func TestGetCommand(test *testing.T) {
@@ -476,13 +478,14 @@ func TestCopyServerResponse(test *testing.T) {
 func BenchmarkGetCommand(bench *testing.B) {
 	bench.ResetTimer()
 	bench.StopTimer()
+	var ignored []byte
 	for i := 0; i < bench.N; i++ {
 		buf := bufio.NewReader(bytes.NewBufferString("$3\r\nget\r\n$3\r\nabc\r\n"))
 		//If this looks hacky, that's because it is
 		//bufio.NewReader doesn't call fill() upon init, so we have to force it
 		buf.Peek(1)
 		bench.StartTimer()
-		GetCommand(buf)
+		GetCommand(buf, ignored, ignored)
 		bench.StopTimer()
 	}
 }

@@ -13,7 +13,6 @@ package rmux
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"github.com/forcedotcom/rmux/connection"
 	"github.com/forcedotcom/rmux/protocol"
@@ -28,11 +27,11 @@ type Client struct {
 	//The connection wrapper for our net connection
 	ConnectionReadWriter *protocol.TimedNetReadWriter
 	//The current command that we're processing
-	command []byte
-	//The string representation of the current command that we're processing
-	stringCommand string
+	command [20]byte
+	commandSlice []byte
+	firstArgumentSlice []byte
 	//The first argument for the current command that we're processing
-	firstArgument []byte
+	firstArgument [1024]byte
 	//The first argument for the current command that we're processing
 	stringArgument string
 	//The number of arguments supplied for the current command that we're processing'
@@ -46,6 +45,10 @@ type Client struct {
 	ActiveConnection *connection.Connection
 	//The current active subscription
 	Subscriptions map[string]bool
+	//length of the first argument
+	argumentLength int
+	//length of the command
+	commandLength int
 }
 
 var (
@@ -58,6 +61,8 @@ var (
 //Initializes a new client, for the given established net connection, with the specified read/write timeouts
 func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration) (newClient *Client) {
 	newClient = &Client{}
+	newClient.commandSlice = newClient.command[:]
+	newClient.firstArgumentSlice = newClient.firstArgument[:]
 	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, readTimeout, writeTimeout)
 	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newClient.ConnectionReadWriter), bufio.NewWriter(newClient.ConnectionReadWriter))
 	newClient.Active = true
@@ -68,31 +73,32 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration) (ne
 //Parses the current command, starting with firstLine.
 //isMultiplexing is supplied to let the client know if single-server-only commands should be supported or not
 func (myClient *Client) ParseCommand(firstLine []byte, isMultiplexing bool) (responded bool, err error) {
-	if bytes.Equal(firstLine, protocol.SHORT_PING_COMMAND) {
+	copy(myClient.commandSlice, firstLine)
+	if len(firstLine) == 4 && myClient.command[0] == 'P' && myClient.command[1] == 'I' && myClient.command[2] == 'N' && myClient.command[3] == 'G' {
 		err = protocol.FlushLine(protocol.PONG_RESPONSE, myClient.ReadWriter.Writer)
 		return true, err
 	}
 
-	myClient.command, myClient.firstArgument, err = protocol.GetCommand(myClient.ReadWriter.Reader)
+	myClient.commandLength, myClient.argumentLength, err = protocol.GetCommand(myClient.ReadWriter.Reader, myClient.commandSlice, myClient.firstArgumentSlice)
 	if err != nil {
 		protocol.Debug("Received error from GetCommand: %s\r\n", err)
 		return false, err
 	}
-	protocol.Debug("Received %s %s\r\n", myClient.command, myClient.firstArgument)
-	myClient.stringCommand = string(myClient.command)
-	myClient.stringArgument = string(myClient.firstArgument)
+//	protocol.Debug("Received %s %s\r\n", myClient.command[0:myClient.commandLength], myClient.firstArgument)
 
 	//PINGs and QUITs should auto-return
-	if bytes.Equal(myClient.command, protocol.PING_COMMAND) {
-		protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-		err = protocol.FlushLine(protocol.PONG_RESPONSE, myClient.ReadWriter.Writer)
-		return true, err
-	} else if bytes.Equal(myClient.command, protocol.QUIT_COMMAND) {
-		//Disable ourselves, if this is a QUIT command.  The server managing this client is responsible for checking this flag for cleanup
-		myClient.Active = false
-		protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-		err = protocol.FlushLine(protocol.OK_RESPONSE, myClient.ReadWriter.Writer)
-		return true, err
+	if myClient.commandLength == 4 {
+		if myClient.command[0] == 'p' && myClient.command[1] == 'i' && myClient.command[2] == 'n' && myClient.command[3] == 'g' {
+			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
+			err = protocol.FlushLine(protocol.PONG_RESPONSE, myClient.ReadWriter.Writer)
+			return true, err
+		} else if myClient.command[0] == 'q' && myClient.command[1] == 'u' && myClient.command[2] == 'i' && myClient.command[3] == 't' {
+			//Disable ourselves, if this is a QUIT command.  The server managing this client is responsible for checking this flag for cleanup
+			myClient.Active = false
+			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
+			err = protocol.FlushLine(protocol.OK_RESPONSE, myClient.ReadWriter.Writer)
+			return true, err
+		}
 	}
 
 	myClient.argumentCount, err = protocol.ParseInt(firstLine[1:])
@@ -101,40 +107,24 @@ func (myClient *Client) ParseCommand(firstLine []byte, isMultiplexing bool) (res
 	}
 
 	//block all unsafe commands
-	if protocol.UNSAFE_FUNCTIONS[myClient.stringCommand] {
+	if !protocol.IsSupportedFunction(myClient.command, myClient.commandLength, isMultiplexing, isMultiplexing && (myClient.argumentCount > 2)) {
 		protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
 		err = protocol.FlushLine(ERR_COMMAND_UNSUPPORTED, myClient.ReadWriter.Writer)
 		return true, err
-		//block all pubsub commands
-	} else if len(myClient.Subscriptions) > 0 && !protocol.PUBSUB_FUNCTIONS[myClient.stringCommand] {
+	}
+	if len(myClient.Subscriptions) > 0 && !(myClient.commandLength == 9 && myClient.command[0] == 's' && myClient.command[1] == 'u') {
 		protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
 		err = protocol.FlushLine(ERR_COMMAND_UNSUPPORTED, myClient.ReadWriter.Writer)
 		return true, err
-	} else if isMultiplexing {
-		if protocol.SINGLE_DB_FUNCTIONS[myClient.stringCommand] {
-			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-			err = protocol.FlushLine(ERR_COMMAND_UNSUPPORTED, myClient.ReadWriter.Writer)
-			return true, err
-			//delete commands can only work on one key at a time, if we're multiplexing
-		} else if bytes.Equal(myClient.command, protocol.DEL_COMMAND) && myClient.argumentCount != 2 {
-			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-			err = protocol.FlushLine(ERR_BAD_ARGUMENTS, myClient.ReadWriter.Writer)
-			return true, err
-			//subscribe commands can only work on one key at a time, if we're multiplexing
-		} else if bytes.Equal(myClient.command, protocol.SUBSCRIBE_COMMAND) && myClient.argumentCount != 2 {
-			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-			err = protocol.FlushLine(ERR_BAD_ARGUMENTS, myClient.ReadWriter.Writer)
-			return true, err
-		}
 	}
 
 	//If we have a select command, fake it and return
-	if bytes.Equal(myClient.command, protocol.SELECT_COMMAND) {
+	if myClient.commandLength == 6 && myClient.command[0] == 's' && myClient.command[1] == 'e' && myClient.command[2] == 'l' {
 		protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
 		//If we have an accompanying argument for our select..
-		if len(myClient.firstArgument) > 0 {
+		if myClient.argumentLength > 0 {
 			//Find what database we want to be selecting
-			myClient.DatabaseId, err = protocol.ParseInt(myClient.firstArgument)
+			myClient.DatabaseId, err = protocol.ParseInt(myClient.firstArgumentSlice[0:myClient.argumentLength])
 			if err == nil {
 				//We've stored the DB into our client, that's enough.  Strip out the remaining message and return
 				err = protocol.FlushLine(protocol.OK_RESPONSE, myClient.ReadWriter.Writer)
@@ -145,10 +135,9 @@ func (myClient *Client) ParseCommand(firstLine []byte, isMultiplexing bool) (res
 			err = protocol.FlushLine(ERR_BAD_ARGUMENTS, myClient.ReadWriter.Writer)
 		}
 		return true, err
-	} else if bytes.Equal(myClient.command, protocol.SUBSCRIBE_COMMAND) {
+	} else if myClient.commandLength == 9 && myClient.command[0] == 's' && myClient.command[1] == 'u' {
+		myClient.stringArgument = string(myClient.firstArgumentSlice[0:myClient.argumentLength])
 		myClient.Subscriptions[myClient.stringArgument] = true
-	} else if bytes.Equal(myClient.command, protocol.UNSUBSCRIBE_COMMAND) {
-		delete(myClient.Subscriptions, myClient.stringArgument)
 	}
 	return false, err
 }

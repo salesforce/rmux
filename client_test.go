@@ -109,6 +109,4 @@ func TestParseCommand(test *testing.T) {
 	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '6', '\r', '\n', 'p', 'u', 'b', 's', 'u', 'b', '\r', '\n'}, ERR_COMMAND_UNSUPPORTED, false, false)
 	//multi should fail with multiplexing on
 	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '5', '\r', '\n', 'm', 'u', 'l', 't', 'i', '\r', '\n'}, ERR_COMMAND_UNSUPPORTED, true, false)
-	//multi should not fail with multiplexing off
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '5', '\r', '\n', 'm', 'u', 'l', 't', 'i', '\r', '\n'}, nil, false, false)
 }
