@@ -51,9 +51,9 @@ func TestCountActiveConnections(test *testing.T) {
 		test.Fatal("Server thinks there are active connections, when there are none")
 	}
 
-	connection := server.ConnectionCluster["/tmp/rmuxTest1.sock"].GetConnection()
+	connection := server.ConnectionCluster[0].GetConnection()
 	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
-	server.ConnectionCluster["/tmp/rmuxTest1.sock"].RecycleRemoteConnection(connection)
+	server.ConnectionCluster[0].RecycleRemoteConnection(connection)
 
 	listenSock2, err := net.Listen("unix", "/tmp/rmuxTest2.sock")
 	if err != nil {
@@ -62,9 +62,9 @@ func TestCountActiveConnections(test *testing.T) {
 	defer func() {
 		listenSock2.Close()
 	}()
-	connection = server.ConnectionCluster["/tmp/rmuxTest2.sock"].GetConnection()
+	connection = server.ConnectionCluster[1].GetConnection()
 	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
-	server.ConnectionCluster["/tmp/rmuxTest2.sock"].RecycleRemoteConnection(connection)
+	server.ConnectionCluster[1].RecycleRemoteConnection(connection)
 
 	connectionCount = server.countActiveConnections()
 	if connectionCount == 2 {
