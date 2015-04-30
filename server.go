@@ -177,8 +177,7 @@ func (myRedisMultiplexer *RedisMultiplexer) generateMultiplexInfo() {
 func (myRedisMultiplexer *RedisMultiplexer) Start() (err error) {
 	myRedisMultiplexer.HashRing, err = connection.NewHashRing(myRedisMultiplexer.ConnectionCluster)
 	if err != nil {
-		println(err)
-		return
+		return err
 	}
 
 	go myRedisMultiplexer.maintainConnectionStates()
