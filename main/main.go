@@ -162,6 +162,20 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 
 	fmt.Printf("+%v\r\n", configs)
 
+	// If we're exiting out because of a misconfiguration, set this flag and we will clean up any instances
+	isErrorCondition := false
+	defer func() {
+		if isErrorCondition {
+			for _, instance := range rmuxInstances {
+				if instance == nil {
+					continue
+				}
+
+				instance.Listener.Close()
+			}
+		}
+	}()
+
 	for i, config := range configs {
 		var rmuxInstance *rmux.RedisMultiplexer
 		var err error
@@ -184,7 +198,10 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, config.Port), config.PoolSize)
 		}
 
+		rmuxInstances[i] = rmuxInstance
+
 		if err != nil {
+			isErrorCondition = true
 			return nil, err
 		}
 
@@ -203,6 +220,7 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 		}
 
 		if rmuxInstance.PrimaryConnectionPool == nil {
+			isErrorCondition = true
 			return nil, errors.New("You must have at least one connection defined")
 		}
 
@@ -243,8 +261,6 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 			rmuxInstance.EndpointWriteTimeout = config.RemoteWriteTimeout
 			fmt.Printf("Setting remote redis write timeout to: %s\r\n", config.RemoteWriteTimeout)
 		}
-
-		rmuxInstances[i] = rmuxInstance
 	}
 
 	return rmuxInstances, nil
@@ -263,7 +279,12 @@ func start(rmuxInstances []*rmux.RedisMultiplexer) {
 		waitGroup.Add(1)
 
 		go func(instance *rmux.RedisMultiplexer) {
-			instance.Start()
+			err := instance.Start()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error starting rmux instance: %s", err)
+				return
+			}
+
 			waitGroup.Done()
 		}(rmuxInstance)
 	}
