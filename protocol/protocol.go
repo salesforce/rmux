@@ -66,8 +66,6 @@ var (
 		"discard":     true,
 		"debug":        true,
 		"exec":        true,
-		"flushall":     true,
-		"flushdb":      true,
 		"lastsave":     true,
 		"move":         true,
 		"monitor":      true,
@@ -96,6 +94,8 @@ var (
 		"brpoplpush":  true,
 		"eval":        true,
 		"keys":        true,
+		"flushall":    true,
+		"flushdb":     true,
 		"mget":        true,
 		"mset":        true,
 		"msetnx":      true,
@@ -232,8 +232,8 @@ func IsSupportedFunction(command [20]byte, commandLength int, isMultiplexing, is
 		//supported if not multiplexing: eval, evalsha
 		return command[1] != 'v' || !isMultiplexing
 	} else if command[0] == 'f' {
-		//unsupported: flushall, flushdb
-		return false
+		//Support flushall and flushdb in non-multiplexing mode
+		return !isMultiplexing
 	} else if command[0] == 'k' {
 		//supported if not multiplexing: keys
 		return !isMultiplexing
