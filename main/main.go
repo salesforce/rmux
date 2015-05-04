@@ -28,6 +28,8 @@ import (
 	"sync"
 )
 
+const DEFAULT_POOL_SIZE = 20
+
 type poolConfig struct {
 	Host string `json:"host"`
 	Port string `json:"port"`
@@ -52,7 +54,7 @@ var host = flag.String("host", "localhost", "The host to listen for incoming con
 var port = flag.String("port", "6379", "The port to listen for incoming connections on")
 var socket = flag.String("socket", "", "The socket to listen for incoming connections on.  If this is provided, host and port are ignored")
 var maxProcesses = flag.Int("maxProcesses", 0, "The number of processes to use.  If this is not defined, go's default is used.")
-var poolSize = flag.Int("poolSize", 50, "The size of the connection pools to use")
+var poolSize = flag.Int("poolSize", DEFAULT_POOL_SIZE, "The size of the connection pools to use")
 var tcpConnections = flag.String("tcpConnections", "localhost:6380 localhost:6381", "TCP connections (destination redis servers) to multiplex over")
 var unixConnections = flag.String("unixConnections", "", "Unix connections (destination redis servers) to multiplex over")
 var localTimeout = flag.Duration("localTimeout", 0, "Timeout to set locally (read+write)")
@@ -185,8 +187,8 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 		}
 
 		if config.PoolSize < 1 {
-			fmt.Println("Pool size must be positive - defaulting to 50\r\n")
-			config.PoolSize = 50
+			fmt.Printf("Pool size must be positive - defaulting to %d\r\n", DEFAULT_POOL_SIZE)
+			config.PoolSize = DEFAULT_POOL_SIZE
 		}
 
 		if config.Socket != "" {
