@@ -1,4 +1,4 @@
-[![Travis CI](https://travis-ci.org/asuahsahua/rmux.svg?branch=master)](https://travis-ci.org/asuahsahua/rmux)
+[![Travis CI](https://travis-ci.org/forcedotcom/rmux.svg?branch=master)](https://travis-ci.org/forcedotcom/rmux)
 # Rmux #
 
 Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux is meant to be used for LAMP stacks, or other short-lived process applications, with high request volume.  It should be run as a client, on every server that connects to redis--to reduce the total inbound connection count to the redis servers, while handle consistent multiplexing.
