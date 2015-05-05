@@ -24,27 +24,27 @@ type ProtocolTester struct {
 
 func (test *ProtocolTester) compareInt(int1, int2 int) {
 	if int1 == int2 {
-		test.Log("Received correct int values", int1, int2)
+		test.Logf("Received correct int values %d %d", int1, int2)
 	} else {
-		test.Error("Did not receive correct int values", int1, int2)
+		test.Errorf("Did not receive correct int values %d %d", int1, int2)
 	}
 }
 
 func (test *ProtocolTester) verifyParseIntError(fakeInt []byte) {
 	_, err := ParseInt(fakeInt)
 	if err == nil {
-		test.Fatal("ParseInt did not fatal on", fakeInt)
+		test.Fatalf("ParseInt did not fatal on %q", fakeInt)
 	} else {
-		test.Log("ParseInt fataled on", fakeInt)
+		test.Logf("ParseInt fataled on %q", fakeInt)
 	}
 }
 
 func (test *ProtocolTester) verifyParseIntResponse(fakeInt []byte, expected int) {
 	value, err := ParseInt(fakeInt)
 	if err == nil {
-		test.Log("ParseInt did not fatal", fakeInt)
+		test.Logf("ParseInt did not fatal %q", fakeInt)
 	} else {
-		test.Fatal("ParseInt fataled on", fakeInt)
+		test.Fatalf("ParseInt fataled on %q", fakeInt)
 	}
 
 	test.compareInt(value, expected)
@@ -63,6 +63,7 @@ func TestParseInt(test *testing.T) {
 	tester.verifyParseIntResponse([]byte("10"), 10)
 }
 
+// Verifies that the given bad command errors
 func (test *ProtocolTester) verifyGetCommandError(badCommand string) {
 	buf := bufio.NewReader(bytes.NewBufferString(badCommand))
 	//If this looks hacky, that's because it is
@@ -71,17 +72,17 @@ func (test *ProtocolTester) verifyGetCommandError(badCommand string) {
 	var commandBuffer []byte
 	_, _, err := GetCommand(buf, commandBuffer, commandBuffer)
 	if err == nil {
-		test.Fatal("GetCommand did not err on", badCommand)
+		test.Fatalf("GetCommand did not err on %q", badCommand)
 	} else {
-		test.Log("GetCommand erred on", badCommand)
+		test.Logf("GetCommand erred on %q", badCommand)
 	}
 }
 
 func (test *ProtocolTester) compareString(str1, str2 string) {
 	if str1 == str2 {
-		test.Log("Received correct string values", str1, str2)
+		test.Logf("Received correct string values %s %s", str1, str2)
 	} else {
-		test.Error("Did not receive correct string values", str1, str2)
+		test.Errorf("Did not receive correct string values %s %s", str1, str2)
 	}
 }
 
@@ -103,6 +104,7 @@ func TestGetCommand(test *testing.T) {
 	tester.verifyGetCommandError("$4\r\ninfo")
 	tester.verifyGetCommandError("$4\r\ninfo\r")
 	tester.verifyGetCommandError("$a\r\ninfo")
+
 	tester.verifyGetCommandError("$3\r\nget\r\n$1a")
 	tester.verifyGetCommandError("$3\r\nget\r\n$a")
 	tester.verifyGetCommandError("$3\r\nget\r\n$1\r\naa")
@@ -121,21 +123,21 @@ func TestWriteLine(test *testing.T) {
 	writeLine(ten_bytes, buf)
 	written := w.Bytes()
 	if len(written) == 0 {
-		test.Log("Verified nothing was flushed after 12/38 chars, remaining: ", buf.Available())
+		test.Logf("Verified nothing was flushed after 12/38 chars, remaining: %d", buf.Available())
 	} else {
 		test.Fatal("Buffer flushed prematurely")
 	}
 	writeLine(ten_bytes, buf)
 	written = w.Bytes()
 	if len(written) == 0 {
-		test.Log("Verified nothing was flushed after 24/38 chars, remaining: ", buf.Available())
+		test.Logf("Verified nothing was flushed after 24/38 chars, remaining: %d", buf.Available())
 	} else {
 		test.Fatal("Buffer flushed prematurely")
 	}
 	writeLine(ten_bytes, buf)
 	written = w.Bytes()
 	if len(written) == 0 {
-		test.Log("Verified nothing was flushed after 36/38 chars, remaining: ", buf.Available())
+		test.Logf("Verified nothing was flushed after 36/38 chars, remaining: %d", buf.Available())
 	} else {
 		test.Fatal("Buffer flushed prematurely")
 	}
@@ -158,7 +160,7 @@ func TestFlushLine(test *testing.T) {
 	writeLine(ten_bytes, buf)
 	written := w.Bytes()
 	if len(written) == 0 {
-		test.Log("Verified nothing was flushed after 12/38 chars, remaining: ", buf.Available())
+		test.Logf("Verified nothing was flushed after 12/38 chars, remaining: %d", buf.Available())
 	} else {
 		test.Fatal("Buffer flushed prematurely")
 	}
@@ -179,9 +181,9 @@ func (test *ProtocolTester) verifyIgnoreBulkMessageError(badLine, badMessage str
 	buf.Peek(1)
 	err := ignoreBulkMessage([]byte(badLine), buf)
 	if err == nil {
-		test.Fatal("ignoreBulkMessage did not fatal on", badMessage)
+		test.Fatalf("ignoreBulkMessage did not fatal on %q", badMessage)
 	} else {
-		test.Log("ignoreBulkMessage fataled on", badMessage)
+		test.Logf("ignoreBulkMessage fataled on %q", badMessage)
 	}
 }
 
@@ -192,14 +194,14 @@ func (test *ProtocolTester) verifyGoodIgnoreBulkMessage(goodLine, goodMessage, e
 	buf.Peek(1)
 	err := ignoreBulkMessage([]byte(goodLine), buf)
 	if err == nil {
-		test.Log("ignoreBulkMessage did not fatal on", goodMessage)
+		test.Logf("ignoreBulkMessage did not fatal on %q", goodMessage)
 	} else {
-		test.Fatal("ignoreBulkMessage fataled on", goodMessage)
+		test.Fatalf("ignoreBulkMessage fataled on $q", goodMessage)
 	}
 	if buf.Buffered() == len(extraMessage) {
-		test.Log("ignoreBulkMessage left the right stuff on the buffer", goodMessage)
+		test.Logf("ignoreBulkMessage left the right stuff on the buffer %q", goodMessage)
 	} else {
-		test.Fatal("ignoreBulkMessage did not leave the right stuff on the buffer", goodMessage)
+		test.Fatalf("ignoreBulkMessage did not leave the right stuff on the buffer %q", goodMessage)
 	}
 }
 
@@ -224,9 +226,9 @@ func (test *ProtocolTester) verifyIgnoreMultiBulkMessageError(badLine, badMessag
 	buf.Peek(1)
 	err := IgnoreMultiBulkMessage([]byte(badLine), buf)
 	if err == nil {
-		test.Fatal("ignoreMultiBulkMessage did not fatal on", badMessage)
+		test.Fatalf("ignoreMultiBulkMessage did not fatal on %q", badMessage)
 	} else {
-		test.Log("ignoreMultiBulkMessage fataled on", badMessage)
+		test.Logf("ignoreMultiBulkMessage fataled on %q", badMessage)
 	}
 }
 
@@ -237,14 +239,14 @@ func (test *ProtocolTester) verifyGoodIgnoreMultiBulkMessage(goodLine, goodMessa
 	buf.Peek(1)
 	err := IgnoreMultiBulkMessage([]byte(goodLine), buf)
 	if err == nil {
-		test.Log("ignoreMultiBulkMessage did not fatal on", goodMessage)
+		test.Logf("ignoreMultiBulkMessage did not fatal on %q", goodMessage)
 	} else {
-		test.Fatal("ignoreMultiBulkMessage fataled on", goodMessage)
+		test.Fatalf("ignoreMultiBulkMessage fataled on %q", goodMessage)
 	}
 	if buf.Buffered() == len(extraMessage) {
-		test.Log("ignoreMultiBulkMessage left the right stuff on the buffer", goodMessage)
+		test.Logf("ignoreMultiBulkMessage left the right stuff on the buffer %q", goodMessage)
 	} else {
-		test.Fatal("ignoreMultiBulkMessage did not leave the right stuff on the buffer", goodMessage)
+		test.Fatalf("ignoreMultiBulkMessage did not leave the right stuff on the buffer %q", goodMessage)
 	}
 }
 
@@ -281,9 +283,9 @@ func (test *ProtocolTester) verifyCopyBulkMessageError(badLine, badMessage strin
 	buf.Peek(1)
 	err := copyBulkMessage([]byte(badLine), writer, buf)
 	if err == nil {
-		test.Fatal("copyBulkMessage did not fatal on", badMessage)
+		test.Fatalf("copyBulkMessage did not fatal on %q", badMessage)
 	} else {
-		test.Log("copyBulkMessage fataled on", badMessage)
+		test.Logf("copyBulkMessage fataled on %q", badMessage)
 	}
 }
 
@@ -298,22 +300,23 @@ func (test *ProtocolTester) verifyGoodCopyBulkMessage(goodLine, goodMessage, ext
 	//bufio.NewReader doesn't call fill() upon init, so we have to force it
 	buf.Peek(1)
 	err := copyBulkMessage([]byte(goodLine), writer, buf)
+	writer.Flush()
 	if err == nil {
-		test.Log("ignoreMultiBulkMessage did not fatal on", goodMessage)
+		test.Logf("ignoreMultiBulkMessage did not fatal on %q", goodMessage)
 	} else {
-		test.Fatal("ignoreMultiBulkMessage fataled on", goodMessage)
+		test.Fatalf("ignoreMultiBulkMessage fataled on %q", goodMessage)
 	}
 	if buf.Buffered() == len(extraMessage) {
-		test.Log("ignoreMultiBulkMessage left the right stuff on the buffer", goodMessage)
+		test.Logf("ignoreMultiBulkMessage left the right stuff on the buffer %q", goodMessage)
 	} else {
-		test.Fatal("ignoreMultiBulkMessage did not leave the right stuff on the buffer", goodMessage)
+		test.Fatalf("ignoreMultiBulkMessage did not leave the right stuff on the buffer %q", goodMessage)
 	}
 
 	fullMessage := strings.Join([]string{goodLine, goodMessage}, "\r\n")
 	if bytes.Equal(w.Bytes(), []byte(fullMessage)) {
 		test.Log("The right stuff got copied into our writer")
 	} else {
-		test.Fatal("Our buffer is missing data?", w.Bytes(), []byte(fullMessage))
+		test.Fatalf("Our buffer is missing data? %q %q", w.Bytes(), []byte(fullMessage))
 	}
 }
 
@@ -327,7 +330,7 @@ func TestCopyBulkMuessage(test *testing.T) {
 	tester.verifyGoodCopyBulkMessage("$3", "123\r\n", "")
 	tester.verifyGoodCopyBulkMessage("$3", "123\r\n", "abc")
 	tester.verifyGoodCopyBulkMessage("$0", "\r\n", "leftover stuff")
-	//newlines are perfectly valid in the middle of payloads, this is why the bulk format exists
+//	newlines are perfectly valid in the middle of payloads, this is why the bulk format exists
 	tester.verifyGoodCopyBulkMessage("$4", "1\r\n2\r\n", "and even more")
 }
 
@@ -343,9 +346,9 @@ func (test *ProtocolTester) verifyCopyMultiBulkMessageError(badLine, badMessage 
 	buf.Peek(1)
 	err := CopyMultiBulkMessage([]byte(badLine), writer, buf)
 	if err == nil {
-		test.Fatal("CopyMultiBulkMessage did not fatal on", badMessage)
+		test.Fatalf("CopyMultiBulkMessage did not fatal on %q", badMessage)
 	} else {
-		test.Log("CopyMultiBulkMessage fataled on", badMessage)
+		test.Logf("CopyMultiBulkMessage fataled on %q", badMessage)
 	}
 }
 
@@ -361,21 +364,21 @@ func (test *ProtocolTester) verifyGoodCopyMultiBulkMessage(goodLine, goodMessage
 	buf.Peek(1)
 	err := CopyMultiBulkMessage([]byte(goodLine), writer, buf)
 	if err == nil {
-		test.Log("CopyMultiBulkMessage did not fatal on", goodMessage)
+		test.Logf("CopyMultiBulkMessage did not fatal on %q", goodMessage)
 	} else {
-		test.Fatal("CopyMultiBulkMessage fataled on", goodMessage)
+		test.Fatalf("CopyMultiBulkMessage fataled on %q", goodMessage)
 	}
 	if buf.Buffered() == len(extraMessage) {
-		test.Log("CopyMultiBulkMessage left the right stuff on the buffer", goodMessage)
+		test.Logf("CopyMultiBulkMessage left the right stuff on the buffer %q", goodMessage)
 	} else {
-		test.Fatal("CopyMultiBulkMessage did not leave the right stuff on the buffer", goodMessage)
+		test.Fatalf("CopyMultiBulkMessage did not leave the right stuff on the buffer %q", goodMessage)
 	}
 
 	fullMessage := strings.Join([]string{goodLine, goodMessage}, "\r\n")
 	if bytes.Equal(w.Bytes(), []byte(fullMessage)) {
 		test.Log("The right stuff got copied into our writer")
 	} else {
-		test.Fatal("Our buffer is missing data?", w.Bytes(), []byte(fullMessage))
+		test.Fatalf("Our buffer is missing data? %q %q", w.Bytes(), []byte(fullMessage))
 	}
 }
 
@@ -412,9 +415,9 @@ func (test *ProtocolTester) verifyCopyServerResponseError(badMessage string) {
 	buf.Peek(1)
 	err := CopyServerResponse(buf, writer)
 	if err == nil {
-		test.Fatal("CopyServerResponse did not fatal on", badMessage)
+		test.Fatalf("CopyServerResponse did not fatal on %q", badMessage)
 	} else {
-		test.Log("CopyServerResponse fataled on", badMessage)
+		test.Logf("CopyServerResponse fataled on %q", badMessage)
 	}
 }
 
@@ -430,20 +433,20 @@ func (test *ProtocolTester) verifyGoodCopyServerResponse(goodMessage, extraMessa
 	buf.Peek(1)
 	err := CopyServerResponse(buf, writer)
 	if err == nil {
-		test.Log("CopyServerResponse did not fatal on", goodMessage)
+		test.Logf("CopyServerResponse did not fatal on %q", goodMessage)
 	} else {
-		test.Fatal("CopyServerResponse fataled on", goodMessage)
+		test.Fatalf("CopyServerResponse fataled on %q", goodMessage)
 	}
 	if buf.Buffered() == len(extraMessage) {
-		test.Log("CopyServerResponse left the right stuff on the buffer", goodMessage)
+		test.Logf("CopyServerResponse left the right stuff on the buffer %q", goodMessage)
 	} else {
-		test.Fatal("CopyServerResponse did not leave the right stuff on the buffer", goodMessage)
+		test.Fatalf("CopyServerResponse did not leave the right stuff on the buffer %q", goodMessage)
 	}
 
 	if bytes.Equal(w.Bytes(), []byte(goodMessage)) {
 		test.Log("The right stuff got copied into our writer")
 	} else {
-		test.Fatal("Our buffer is missing data?", w.Bytes(), []byte(goodMessage))
+		test.Fatalf("Our buffer is missing data? %q %q", w.Bytes(), []byte(goodMessage))
 	}
 }
 

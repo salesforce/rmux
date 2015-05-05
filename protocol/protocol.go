@@ -34,6 +34,7 @@ var (
 	ERROR_MULTIBULK_FORMAT_REQUIRED = errors.New("Multibulk format is required")
 	//Used when we expect a redis bulk-format payload, and do not receive one
 	ERROR_BAD_BULK_FORMAT = errors.New("Bad bulk format supplied")
+	ERROR_COMMAND_PARSE = errors.New("Command parse error")
 
 	//Commands declared once for convenience
 	DEL_COMMAND         = []byte{'d', 'e', 'l'}
@@ -313,6 +314,12 @@ func GetCommand(source *bufio.Reader, command, firstArgument []byte) (commandLen
 	}
 
 	for index := 0; index < commandLength; index++ {
+		if len(command) < index + 1 {
+			Debug("Command length mismatch")
+			err = ERROR_COMMAND_PARSE
+			return
+		}
+
 		//if we have a capital value
 		if command[index] <= 'Z' {
 			//lowercaseize it
@@ -569,11 +576,6 @@ func copyBulkMessage(firstLine []byte, destination *bufio.Writer, source *bufio.
 		return
 	}
 
-//	err = destination.Flush()
-	if err != nil {
-		Debug("copyBulkMessage: Error received from Flush: %s", err)
-		return
-	}
 	return
 }
 
