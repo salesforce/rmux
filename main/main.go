@@ -110,14 +110,14 @@ func main() {
 func configureFromArgs() ([]poolConfig, error) {
 	var arrTcpConnections []string
 	if *tcpConnections != "" {
-		arrTcpConnections = strings.Split(*tcpConnections, "")
+		arrTcpConnections = strings.Split(*tcpConnections, " ")
 	} else {
 		arrTcpConnections = []string{}
 	}
 
 	var arrUnixConnections []string
 	if *unixConnections != "" {
-		arrUnixConnections = strings.Split(*unixConnections, "")
+		arrUnixConnections = strings.Split(*unixConnections, " ")
 	} else {
 		arrUnixConnections = []string{}
 	}
@@ -163,8 +163,6 @@ func configureFromFile(configFile string) ([]poolConfig, error) {
 
 func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 	rmuxInstances := make([]*rmux.RedisMultiplexer, len(configs))
-
-	fmt.Printf("+%v\r\n", configs)
 
 	// If we're exiting out because of a misconfiguration, set this flag and we will clean up any instances
 	isErrorCondition := false
@@ -279,17 +277,17 @@ func start(rmuxInstances []*rmux.RedisMultiplexer) {
 		}
 	}()
 
-	for _, rmuxInstance := range rmuxInstances {
+	for i, rmuxInstance := range rmuxInstances {
 		waitGroup.Add(1)
 
 		go func(instance *rmux.RedisMultiplexer) {
+			defer waitGroup.Done()
+
 			err := instance.Start()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error starting rmux instance: %s", err)
+				fmt.Fprintf(os.Stderr, "Error starting rmux instance %d: %s", i, err)
 				return
 			}
-
-			waitGroup.Done()
 		}(rmuxInstance)
 	}
 
