@@ -131,10 +131,10 @@ func TestIsSupportedFunction_SupportedWithMultiplexing(test *testing.T) {
 
 func TestIsSupportedFunction_SupportedWithoutMultiplexing(test *testing.T) {
 	commands := map[string]bool {
-		"ping"     : true,
+//		"ping"     : true,
 		"flushall" : true,
 		"flushdb"  : true,
-		"script"   : true,
+//		"script"   : true,
 	}
 
 	for command, shouldBeSupported := range commands {

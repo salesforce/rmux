@@ -17,6 +17,7 @@ import (
 	"errors"
 	"io"
 	"time"
+	"fmt"
 )
 
 const (
@@ -232,6 +233,7 @@ func IsSupportedFunction(command [20]byte, commandLength int, isMultiplexing, is
 		//supported if not multiplexing: eval, evalsha
 		return command[1] != 'v' || !isMultiplexing
 	} else if command[0] == 'f' {
+		panic(fmt.Sprintf("command %s isMultiplexing %t", command, isMultiplexing))
 		//Support flushall and flushdb in non-multiplexing mode
 		return !isMultiplexing
 	} else if command[0] == 'k' {
