@@ -48,5 +48,5 @@ for the configuration json is as follows:
 ]
 ```
 
-[host, port] or socket is required, as is at least one of tcpConnections or unixConnections. Using the configuration file
-you are capable of creating multiple rmux pools.
+`[host, port]` or `socket` is required, as is at least one of `tcpConnections` or `unixConnections`. Using the configuration file
+you are capable of specifying and creating multiple rmux pools.
