@@ -103,7 +103,7 @@ func (myClient *Client) ParseCommand(firstLine []byte, isMultiplexing bool) (res
 
 	myClient.argumentCount, err = protocol.ParseInt(firstLine[1:])
 	if err != nil {
-		return
+		return false, err
 	}
 
 	//block all unsafe commands

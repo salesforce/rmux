@@ -40,7 +40,10 @@ Usage of rmux:
   -socket="": The socket to listen for incoming connections on.  If this is provided, host and port are ignored
   -tcpConnections="localhost:6380 localhost:6381": TCP connections (destination redis servers) to multiplex over
   -unixConnections="": Unix connections (destination redis servers) to multiplex over
+  -config="": Path to configuration file
 ```
+
+For more details about rmux configuration see [Configuration](doc/config.md)
 
 Localhost example:
 ```
