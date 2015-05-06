@@ -38,7 +38,7 @@ func checkParseCommandResponse(test *testing.T, myClient *Client, command, respo
 		if responded {
 			test.Log("Expected a response, and got one")
 		} else {
-			test.Fatal("Expected a response, and did not get one on ", string(command))
+			test.Fatalf("Expected a response, and did not get one on %q. Responded: %s Err: %s", string(command), err)
 		}
 	} else {
 		if responded {
@@ -76,16 +76,13 @@ func TestParseCommand(test *testing.T) {
 	if err != nil {
 		test.Fatal("Cannot listen on /tmp/rmuxTest1.sock: ", err)
 	}
-	defer func() {
-		listenSock.Close()
-	}()
+	defer listenSock.Close()
+
 	testConnection, err := net.DialTimeout("unix", "/tmp/rmuxTest1.sock", 1*time.Second)
 	if err != nil {
 		test.Fatal("Could not dial in to our local rmux sock")
 	}
-	defer func() {
-		testConnection.Close()
-	}()
+	defer testConnection.Close()
 
 	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond)
 
@@ -94,19 +91,62 @@ func TestParseCommand(test *testing.T) {
 	//non-short ping should err, if it's not in multibulk format
 	checkParseCommandResponse(test, client, protocol.PING_COMMAND, nil, false, true)
 	//ping in proper format should respond appropriately
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '4', '\r', '\n', 'p', 'i', 'n', 'g', '\r', '\n'}, protocol.PONG_RESPONSE, false, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$4\r\nping\r\n"), protocol.PONG_RESPONSE, false, false)
 	//quit in proper format should respond appropriately
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '4', '\r', '\n', 'q', 'u', 'i', 't', '\r', '\n'}, protocol.OK_RESPONSE, false, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$4\r\nquit\r\n"), protocol.OK_RESPONSE, false, false)
 	//select without database should err
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '6', '\r', '\n', 's', 'e', 'l', 'e', 'c', 't', '\r', '\n'}, ERR_BAD_ARGUMENTS, false, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$6\r\nselect\r\n"), ERR_BAD_ARGUMENTS, false, false)
 	//select in proper format should respond appropriately
-	checkParseCommandResponse(test, client, []byte{'*', '2', '\r', '\n', '$', '6', '\r', '\n', 's', 'e', 'l', 'e', 'c', 't', '\r', '\n', '$', '1', '\r', '\n', '1', '\r', '\n'}, protocol.OK_RESPONSE, false, false)
+	checkParseCommandResponse(test, client, []byte("*2\r\n$6\r\nselect\r\n$1\r\n1\r\n"), protocol.OK_RESPONSE, false, false)
 	//select in a bad format should err
-	checkParseCommandResponse(test, client, []byte{'*', '2', '\r', '\n', '$', '6', '\r', '\n', 's', 'e', 'l', 'e', 'c', 't', '\r', '\n', '$', '1', '\r', '\n', 'a', '\r', '\n'}, ERR_BAD_ARGUMENTS, false, false)
+	checkParseCommandResponse(test, client, []byte("*2\r\n$6\r\nselect\r\n$1\r\na\r\n"), ERR_BAD_ARGUMENTS, false, false)
 	//random command on our blacklist should respond appropriately
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '4', '\r', '\n', 'a', 'u', 't', 'h', '\r', '\n'}, ERR_COMMAND_UNSUPPORTED, false, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$4\r\nauth\r\n"), ERR_COMMAND_UNSUPPORTED, false, false)
 	//random command on our pubsub list should respond appropriately
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '6', '\r', '\n', 'p', 'u', 'b', 's', 'u', 'b', '\r', '\n'}, ERR_COMMAND_UNSUPPORTED, false, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$6\r\npubsub\r\n"), ERR_COMMAND_UNSUPPORTED, false, false)
 	//multi should fail with multiplexing on
-	checkParseCommandResponse(test, client, []byte{'*', '1', '\r', '\n', '$', '5', '\r', '\n', 'm', 'u', 'l', 't', 'i', '\r', '\n'}, ERR_COMMAND_UNSUPPORTED, true, false)
+	checkParseCommandResponse(test, client, []byte("*1\r\n$5\r\nmulti\r\n"), ERR_COMMAND_UNSUPPORTED, true, false)
+}
+
+func TestIsSupportedFunction_SupportedWithMultiplexing(test *testing.T) {
+	commands := map[string]bool {
+		"ping"     : true,
+		"flushall" : false,
+		"flushdb"  : false,
+	}
+
+	for command, shouldBeSupported := range commands {
+		var bcommand [20]byte
+		copy(bcommand[:], command)
+
+		if protocol.IsSupportedFunction(bcommand, len(command), true, false) != shouldBeSupported {
+			if shouldBeSupported {
+				test.Errorf("Should be supported in multiplexing mode but is not: %s", command)
+			} else {
+				test.Errorf("Should not be supported in multiplexing mode but is: %s", command)
+			}
+		}
+	}
+}
+
+func TestIsSupportedFunction_SupportedWithoutMultiplexing(test *testing.T) {
+	commands := map[string]bool {
+//		"ping"     : true,
+		"flushall" : true,
+		"flushdb"  : true,
+//		"script"   : true,
+	}
+
+	for command, shouldBeSupported := range commands {
+		var bcommand [20]byte
+		copy(bcommand[:], command)
+
+		if protocol.IsSupportedFunction(bcommand, len(command), false, false) != shouldBeSupported {
+			if shouldBeSupported {
+				test.Errorf("Should be supported in non-multiplexing mode but is not: %s", command)
+			} else {
+				test.Errorf("Should not be supported in non-multiplexing mdoe but is: %s", command)
+			}
+		}
+	}
 }

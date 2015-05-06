@@ -17,6 +17,7 @@ import (
 	"errors"
 	"io"
 	"time"
+	"fmt"
 )
 
 const (
@@ -37,22 +38,22 @@ var (
 	ERROR_COMMAND_PARSE = errors.New("Command parse error")
 
 	//Commands declared once for convenience
-	DEL_COMMAND         = []byte{'d', 'e', 'l'}
-	SUBSCRIBE_COMMAND   = []byte{'s', 'u', 'b', 's', 'c', 'r', 'i', 'b', 'e'}
-	UNSUBSCRIBE_COMMAND = []byte{'u', 'n', 's', 'u', 'b', 's', 'c', 'r', 'i', 'b', 'e'}
-	PING_COMMAND        = []byte{'p', 'i', 'n', 'g'}
-	INFO_COMMAND        = []byte{'i', 'n', 'f', 'o'}
-	SHORT_PING_COMMAND  = []byte{'P', 'I', 'N', 'G'}
-	SELECT_COMMAND      = []byte{'s', 'e', 'l', 'e', 'c', 't'}
-	QUIT_COMMAND        = []byte{'q', 'u', 'i', 't'}
+	DEL_COMMAND         = []byte("del")
+	SUBSCRIBE_COMMAND   = []byte("subscribe")
+	UNSUBSCRIBE_COMMAND = []byte("unsubscribe")
+	PING_COMMAND        = []byte("ping")
+	INFO_COMMAND        = []byte("info")
+	SHORT_PING_COMMAND  = []byte("PING")
+	SELECT_COMMAND      = []byte("select")
+	QUIT_COMMAND        = []byte("quit")
 
 	//Responses declared once for convenience
-	OK_RESPONSE   = []byte{'+', 'O', 'K'}
-	PONG_RESPONSE = []byte{'+', 'P', 'O', 'N', 'G'}
-	ERR_RESPONSE  = []byte{'$', '-', '1'}
+	OK_RESPONSE   = []byte("+OK")
+	PONG_RESPONSE = []byte("+PONG")
+	ERR_RESPONSE  = []byte("$-1")
 
 	//Redis expects \r\n newlines.  Using this means we can stop remembering that
-	REDIS_NEWLINE = []byte{'\r', '\n'}
+	REDIS_NEWLINE = []byte("\r\n")
 
 	//These functions should not be executed through a proxy.
 	//If you know what you're doing, you are welcome to execute them directly on your server
@@ -66,8 +67,6 @@ var (
 		"discard":     true,
 		"debug":        true,
 		"exec":        true,
-		"flushall":     true,
-		"flushdb":      true,
 		"lastsave":     true,
 		"move":         true,
 		"monitor":      true,
@@ -96,6 +95,8 @@ var (
 		"brpoplpush":  true,
 		"eval":        true,
 		"keys":        true,
+		"flushall":    true,
+		"flushdb":     true,
 		"mget":        true,
 		"mset":        true,
 		"msetnx":      true,
@@ -232,8 +233,9 @@ func IsSupportedFunction(command [20]byte, commandLength int, isMultiplexing, is
 		//supported if not multiplexing: eval, evalsha
 		return command[1] != 'v' || !isMultiplexing
 	} else if command[0] == 'f' {
-		//unsupported: flushall, flushdb
-		return false
+		panic(fmt.Sprintf("command %s isMultiplexing %t", command, isMultiplexing))
+		//Support flushall and flushdb in non-multiplexing mode
+		return !isMultiplexing
 	} else if command[0] == 'k' {
 		//supported if not multiplexing: keys
 		return !isMultiplexing
