@@ -84,7 +84,7 @@ func (myClient *Client) ParseCommand(firstLine []byte, isMultiplexing bool) (res
 		protocol.Debug("Received error from GetCommand: %s\r\n", err)
 		return false, err
 	}
-	protocol.Debug("Received %s %s\r\n", myClient.command[0:myClient.commandLength], myClient.firstArgument)
+//	protocol.Debug("Received %s %s\r\n", myClient.command[0:myClient.commandLength], myClient.firstArgument)
 
 	//PINGs and QUITs should auto-return
 	if myClient.commandLength == 4 {

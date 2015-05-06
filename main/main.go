@@ -23,6 +23,7 @@ import (
 	"os"
 	"errors"
 	"sync"
+	"strconv"
 )
 
 const DEFAULT_POOL_SIZE = 20
@@ -52,10 +53,7 @@ func main() {
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error when creating cpu profile file: %s\r\n", err)
-			os.Exit(1)
-		}
+		terminateIfError(err, "Error when creating cpu profile file: %s\r\n")
 
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
@@ -67,17 +65,10 @@ func main() {
 	} else {
 		configs, err = configureFromArgs()
 	}
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing configuration options: %s\n", err)
-		os.Exit(1)
-	}
+	terminateIfError(err, "Error parsing configuration options: %s\r\n")
 
 	rmuxInstances, err := createInstances(configs)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating rmux instances: %s\n", err)
-		os.Exit(1)
-	}
+	terminateIfError(err, "Error creating rmux instances: %s\r\n")
 
 	fmt.Printf("Starting %d rmux instances\r\n", len(rmuxInstances))
 
@@ -158,7 +149,7 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 			rmuxInstance, err = rmux.NewRedisMultiplexer("unix", config.Socket, config.PoolSize)
 		} else {
 			fmt.Printf("Initializing rmux server on host: %s and port: %d\r\n", config.Host, config.Port)
-			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, string(config.Port)), config.PoolSize)
+			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, strconv.Itoa(config.Port)), config.PoolSize)
 		}
 
 		rmuxInstances[i] = rmuxInstance
@@ -255,3 +246,13 @@ func start(rmuxInstances []*rmux.RedisMultiplexer) {
 	waitGroup.Wait()
 }
 
+// Terminates the program if the passed in error does not evaluate to nil.
+// err will be the first value of formatted string
+func terminateIfError(err error, format string, a ...interface{}) {
+	if err != nil {
+		allArgs := append([]interface{}{err}, a...)
+
+		fmt.Fprintf(os.Stderr, format, allArgs...)
+		os.Exit(1)
+	}
+}
