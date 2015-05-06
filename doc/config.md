@@ -24,10 +24,10 @@ Configuration can be handled either via command-line arguments or via config fil
 ### Configuration file
 `rmux` accepts a `-config=/path/to/file.json` argument that specifies a path to a json configuration file. The format
 for the configuration json is as follows:
-```json
+```
 [
   {
-    "host": "string",
+    "host": string,
     "port": int,
     "socket": string,
     "maxProcesses": int,
