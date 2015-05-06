@@ -21,37 +21,14 @@ import (
 	"syscall"
 	"runtime/pprof"
 	"os"
-	"time"
-	"io/ioutil"
-	"encoding/json"
 	"errors"
 	"sync"
 )
 
 const DEFAULT_POOL_SIZE = 20
 
-type poolConfig struct {
-	Host                   string          `json:"host"`
-	Port                   string          `json:"port"`
-	Socket                 string          `json:"socket"`
-	MaxProcesses           int             `json:"maxProcesses"`
-	PoolSize               int             `json:"poolSize"`
-
-	TcpConnections         []string        `json:"tcpConnections"`
-	UnixConnections        []string        `json:"unixConnections"`
-
-	LocalTimeout           time.Duration   `json:"localTimeout"`
-	LocalReadTimeout       time.Duration   `json:"localReadTimeout"`
-	LocalWriteTimeout      time.Duration   `json:"localWriteTimeout"`
-
-	RemoteTimeout          time.Duration   `json:"remoteTimeout"`
-	RemoteReadTimeout      time.Duration   `json:"remoteReadTimeout"`
-	RemoteWriteTimeout     time.Duration   `json:"remoteWriteTimeout"`
-	RemoteConnectTimeout   time.Duration   `json:"remoteConnectTimeout"`
-}
-
 var host                 = flag.String("host", "localhost", "The host to listen for incoming connections on")
-var port                 = flag.String("port", "6379", "The port to listen for incoming connections on")
+var port                 = flag.Int("port", 6379, "The port to listen for incoming connections on")
 var socket               = flag.String("socket", "", "The socket to listen for incoming connections on.  If this is provided, host and port are ignored")
 var maxProcesses         = flag.Int("maxProcesses", 0, "The number of processes to use.  If this is not defined, go's default is used.")
 var poolSize             = flag.Int("poolSize", DEFAULT_POOL_SIZE, "The size of the connection pools to use")
@@ -70,7 +47,7 @@ var configFile           = flag.String("config", "", "Configuration file (JSON)"
 func main() {
 	flag.Parse()
 
-	var configs []poolConfig
+	var configs []PoolConfig
 	var err error
 
 	if *cpuProfile != "" {
@@ -86,7 +63,7 @@ func main() {
 
 
 	if *configFile != "" {
-		configs, err = configureFromFile(*configFile)
+		configs, err = ReadConfigFromFile(*configFile)
 	} else {
 		configs, err = configureFromArgs()
 	}
@@ -107,7 +84,7 @@ func main() {
 	start(rmuxInstances)
 }
 
-func configureFromArgs() ([]poolConfig, error) {
+func configureFromArgs() ([]PoolConfig, error) {
 	var arrTcpConnections []string
 	if *tcpConnections != "" {
 		arrTcpConnections = strings.Split(*tcpConnections, " ")
@@ -122,7 +99,7 @@ func configureFromArgs() ([]poolConfig, error) {
 		arrUnixConnections = []string{}
 	}
 
-	config := []poolConfig { {
+	config := []PoolConfig { {
 		Host                 : *host,
 		Port                 : *port,
 		Socket               : *socket,
@@ -145,23 +122,7 @@ func configureFromArgs() ([]poolConfig, error) {
 	return config, nil
 }
 
-func configureFromFile(configFile string) ([]poolConfig, error) {
-	fileContents, err :=  ioutil.ReadFile(configFile)
-	if err != nil {
-		return nil, err
-	}
-
-	var configs []poolConfig
-
-	err = json.Unmarshal(fileContents, &configs)
-	if err != nil {
-		return nil, err
-	}
-
-	return configs, nil
-}
-
-func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
+func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 	rmuxInstances := make([]*rmux.RedisMultiplexer, len(configs))
 
 	// If we're exiting out because of a misconfiguration, set this flag and we will clean up any instances
@@ -196,8 +157,8 @@ func createInstances(configs []poolConfig) ([]*rmux.RedisMultiplexer, error) {
 			fmt.Printf("Initializing rmux server on socket %s\r\n", config.Socket)
 			rmuxInstance, err = rmux.NewRedisMultiplexer("unix", config.Socket, config.PoolSize)
 		} else {
-			fmt.Printf("Initializing rmux server on host: %s and port: %s\r\n", config.Host, config.Port)
-			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, config.Port), config.PoolSize)
+			fmt.Printf("Initializing rmux server on host: %s and port: %d\r\n", config.Host, config.Port)
+			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, string(config.Port)), config.PoolSize)
 		}
 
 		rmuxInstances[i] = rmuxInstance
