@@ -12,7 +12,7 @@
 package connection
 
 import (
-	"github.com/forcedotcom/rmux/protocol"
+	// "github.com/forcedotcom/rmux/protocol"
 	"time"
 )
 
@@ -85,12 +85,12 @@ func (myConnectionPool *ConnectionPool) CheckConnectionState() bool {
 	myConnection := myConnectionPool.GetConnection()
 	//If we failed to bind, or if our PING fails, abort
 	if myConnection != nil && myConnection.CheckConnection() {
-		protocol.Debug("The pool is up\r\n")
+		// protocol.Debug("The pool is up\r\n")
 		myConnectionPool.IsConnected = true
 		myConnectionPool.RecycleRemoteConnection(myConnection)
 		return true
 	} else {
-		protocol.Debug("The pool is down\r\n")
+		// protocol.Debug("The pool is down\r\n")
 		myConnectionPool.IsConnected = false
 		for {
 			//drain all the connections

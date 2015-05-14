@@ -147,7 +147,7 @@ func IsSupportedFunction(command [20]byte, commandLength int, isMultiplexing, is
 			return false
 		}
 		//supported if multiplexing is disabled: script, sdiff, sdiffstore, sinter, sinterstore, smove, sunion, sunionstore
-		if isMultiplexing {
+		if !isMultiplexing {
 			return true
 		}
 		//supported: scard
@@ -371,31 +371,31 @@ func GetCommand(source *bufio.Reader, command, firstArgument []byte) (commandLen
 func FlushLine(line []byte, destination *bufio.Writer) (err error) {
 	err = writeLine(line, destination)
 	if err != nil {
-		Debug("FlushLine: Error received from writeLine: %s", err)
+		// Debug("FlushLine: Error received from writeLine: %s", err)
 		return
 	}
-	startTime := time.Now()
+	// startTime := time.Now()
 	err = destination.Flush()
-	Debug("FlushLine: Time to flush: %s\r\n", time.Since(startTime))
+	// Debug("FlushLine: Time to flush: %s\r\n", time.Since(startTime))
 	return
 }
 
 //Writes the given line to the buffer, followed by a GO_NEWLINE
 //Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
 func writeLine(line []byte, destination *bufio.Writer) (err error) {
-	startTime := time.Now()
+	// startTime := time.Now()
 	_, err = destination.Write(line)
 	if err != nil {
-		Debug("writeLine: Error received from write: %s", err)
+		// Debug("writeLine: Error received from write: %s", err)
 		return
 	}
 
 	_, err = destination.Write(REDIS_NEWLINE)
 	if err != nil {
-		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
+		// Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
 		return
 	}
-	Debug("writeLine: Time to write line: %s\r\n", time.Since(startTime))
+	// Debug("writeLine: Time to write line: %s\r\n", time.Since(startTime))
 	return
 }
 

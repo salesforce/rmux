@@ -157,9 +157,9 @@ func (myRedisMultiplexer *RedisMultiplexer) maintainConnectionStates() {
 	for myRedisMultiplexer.active {
 		myRedisMultiplexer.activeConnectionCount = myRedisMultiplexer.countActiveConnections()
 		myRedisMultiplexer.refreshSubscriptions()
-		protocol.Debug("We have %d connections\r\n", myRedisMultiplexer.connectionCount)
+		// protocol.Debug("We have %d connections\r\n", myRedisMultiplexer.connectionCount)
 		runtime.ReadMemStats(&m)
-		protocol.Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)\n", m.HeapInuse, m.HeapIdle, m.HeapReleased)
+		// protocol.Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)\n", m.HeapInuse, m.HeapIdle, m.HeapReleased)
 		myRedisMultiplexer.generateMultiplexInfo()
 		time.Sleep(100 * time.Millisecond)
 	}
