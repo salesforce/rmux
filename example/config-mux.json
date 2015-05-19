@@ -1,0 +1,6 @@
+[
+	{
+		"socket": "/usr/local/var/run/rmux-mux.sock",
+		"tcpConnections": [ "localhost:6379", "localhost:6379" ]
+	}
+]

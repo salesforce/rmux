@@ -32,3 +32,5 @@ _testmain.go
 *.iml
 
 build
+
+.DS_Store

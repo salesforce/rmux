@@ -1,20 +1,35 @@
-//Copyright (c) 2013, Salesforce.com, Inc.
-//All rights reserved.
-//
-//Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-//
-//	Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-//	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-//	Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-//
-//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*
+ * Copyright (c) 2015, Salesforce.com, Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ * following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ *   disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+ *   disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * * Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products
+ *   derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 package rmux
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/forcedotcom/rmux/connection"
+	"github.com/forcedotcom/rmux/graphite"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	"io"
 	"net"
@@ -29,9 +44,9 @@ import (
 
 var (
 	//Response code for when a command (that operates on multiple keys) is used on a server that is multiplexing
-	MULTIPLEX_OPERATION_UNSUPPORTED_RESPONSE = []byte("-ERR This command is not supported for multiplexing servers")
+	MULTIPLEX_OPERATION_UNSUPPORTED_RESPONSE = []byte("This command is not supported for multiplexing servers")
 	//Response code for when a client can't connect to any target servers
-	CONNECTION_DOWN_RESPONSE = []byte("-ERR Connection down")
+	CONNECTION_DOWN_RESPONSE = []byte("Connection down")
 )
 
 //The main RedisMultiplexer
@@ -41,8 +56,6 @@ type RedisMultiplexer struct {
 	HashRing *connection.HashRing
 	//hashmap of [connection endpoint] -> connectionPools
 	ConnectionCluster []*connection.ConnectionPool
-	//hashmap of [subscription names] -> subscriptions
-	SubscriptionCluster map[string]*Subscription
 	//The net.listener for our server
 	Listener net.Listener
 	//The amount of connections to store, in each of our connectionpools
@@ -59,7 +72,8 @@ type RedisMultiplexer struct {
 	ClientReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	ClientWriteTimeout time.Duration
-
+	// The graphite statsd server to ping with metrics
+	GraphiteServer *string
 	//Whether or not the multiplexer is active.  Used to determine when a tear-down should be occuring
 	active bool
 	//The amount of active (outbound) connections that we have
@@ -68,12 +82,14 @@ type RedisMultiplexer struct {
 	connectionCount int32
 	//whether or not we are multiplexing
 	multiplexing bool
+	// Cached 'info' command response for multiplexing servers
 	infoResponse []byte
-	infoMutex    sync.Mutex
+	// Read/Write mutex for above infoResponse slice
+	infoMutex sync.RWMutex
 }
 
 //Sub-task that handles the cleanup when a server goes down
-func (myRedisMultiplexer *RedisMultiplexer) initializeCleanup() {
+func (this *RedisMultiplexer) initializeCleanup() {
 	//Make a single-item channel for sigterm requests
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -81,12 +97,12 @@ func (myRedisMultiplexer *RedisMultiplexer) initializeCleanup() {
 	// Block until we have a kill-request to pop off
 	<-c
 	//Flag ourselves as cleaning up
-	myRedisMultiplexer.active = false
+	this.active = false
 	//And close our listener
-	myRedisMultiplexer.Listener.Close()
+	this.Listener.Close()
 	//Give ourselves a bit to clean up
 	time.Sleep(time.Millisecond * 150)
-	os.Exit(1)
+	os.Exit(0)
 }
 
 //Initializes a new redis multiplexer, listening on the given protocol/endpoint, with a set connectionPool size
@@ -99,7 +115,6 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 		return nil, err
 	}
 	newRedisMultiplexer.ConnectionCluster = make([]*connection.ConnectionPool, 0)
-	newRedisMultiplexer.SubscriptionCluster = make(map[string]*Subscription)
 	newRedisMultiplexer.PoolSize = poolSize
 	newRedisMultiplexer.active = true
 	newRedisMultiplexer.EndpointConnectTimeout = connection.EXTERN_CONNECT_TIMEOUT
@@ -107,29 +122,27 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 	newRedisMultiplexer.EndpointWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.ClientReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.ClientWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
-	newRedisMultiplexer.infoMutex = sync.Mutex{}
-	protocol.Debug("Redis Multiplexer Initialized\r\n")
+	newRedisMultiplexer.infoMutex = sync.RWMutex{}
+//	Debug("Redis Multiplexer Initialized")
 	return
 }
 
 //Adds a connection to the redis multiplexer, for the given protocol and endpoint
-func (myRedisMultiplexer *RedisMultiplexer) AddConnection(remoteProtocol, remoteEndpoint string) {
-	connectionCluster := connection.NewConnectionPool(remoteProtocol, remoteEndpoint, myRedisMultiplexer.PoolSize)
-	connectionCluster.ConnectTimeout = myRedisMultiplexer.EndpointConnectTimeout
-	connectionCluster.ReadTimeout = myRedisMultiplexer.EndpointReadTimeout
-	connectionCluster.WriteTimeout = myRedisMultiplexer.EndpointWriteTimeout
-	myRedisMultiplexer.ConnectionCluster = append(myRedisMultiplexer.ConnectionCluster, connectionCluster)
-	if len(myRedisMultiplexer.ConnectionCluster) == 1 {
-		myRedisMultiplexer.PrimaryConnectionPool = connectionCluster
+func (this *RedisMultiplexer) AddConnection(remoteProtocol, remoteEndpoint string) {
+	connectionCluster := connection.NewConnectionPool(remoteProtocol, remoteEndpoint, this.PoolSize,
+		this.EndpointConnectTimeout, this.EndpointReadTimeout, this.EndpointWriteTimeout)
+	this.ConnectionCluster = append(this.ConnectionCluster, connectionCluster)
+	if len(this.ConnectionCluster) == 1 {
+		this.PrimaryConnectionPool = connectionCluster
 	} else {
-		myRedisMultiplexer.multiplexing = true
+		this.multiplexing = true
 	}
 }
 
 //Counts the number of active endpoints on the server
-func (myRedisMultiplexer *RedisMultiplexer) countActiveConnections() (activeConnections int) {
+func (this *RedisMultiplexer) countActiveConnections() (activeConnections int) {
 	activeConnections = 0
-	for _, connectionPool := range myRedisMultiplexer.ConnectionCluster {
+	for _, connectionPool := range this.ConnectionCluster {
 		if connectionPool.CheckConnectionState() {
 			activeConnections++
 		}
@@ -137,176 +150,218 @@ func (myRedisMultiplexer *RedisMultiplexer) countActiveConnections() (activeConn
 	return
 }
 
-//Refreshes all subscription's connections, incase one of our connectionPools has fallen offline, or come back online
-func (myRedisMultiplexer *RedisMultiplexer) refreshSubscriptions() {
-	for channelName, mySubscription := range myRedisMultiplexer.SubscriptionCluster {
-		if len(mySubscription.clients) == 0 {
-			mySubscription.RequestStop = true
-			delete(myRedisMultiplexer.SubscriptionCluster, channelName)
-			continue
-		}
-		connectionPool := myRedisMultiplexer.HashRing.GetConnectionPool(2, []byte(channelName))
-		mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
-	}
-	return
-}
-
 //Checks the status of all connections, and calculates how many of them are currently up
-func (myRedisMultiplexer *RedisMultiplexer) maintainConnectionStates() {
+func (this *RedisMultiplexer) maintainConnectionStates() {
 	var m runtime.MemStats
-	for myRedisMultiplexer.active {
-		myRedisMultiplexer.activeConnectionCount = myRedisMultiplexer.countActiveConnections()
-		myRedisMultiplexer.refreshSubscriptions()
-		// protocol.Debug("We have %d connections\r\n", myRedisMultiplexer.connectionCount)
+	for this.active {
+		this.activeConnectionCount = this.countActiveConnections()
+//		// Debug("We have %d connections", this.connectionCount)
 		runtime.ReadMemStats(&m)
-		// protocol.Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)\n", m.HeapInuse, m.HeapIdle, m.HeapReleased)
-		myRedisMultiplexer.generateMultiplexInfo()
+//		// Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)", m.HeapInuse, m.HeapIdle, m.HeapReleased)
+		this.generateMultiplexInfo()
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
 //Generates the Info response for a multiplexed server
-func (myRedisMultiplexer *RedisMultiplexer) generateMultiplexInfo() {
-	tmpSlice := fmt.Sprintf("rmux_version: %s\r\ngo_version: %s\r\nprocess_id: %d\r\nconnected_clients: %d\r\nactive_endpoints: %d\r\ntotal_endpoints: %d\r\nrole: master\r\n", "1.0", runtime.Version(), os.Getpid(), myRedisMultiplexer.connectionCount, myRedisMultiplexer.activeConnectionCount, len(myRedisMultiplexer.ConnectionCluster))
-	myRedisMultiplexer.infoMutex.Lock()
-	myRedisMultiplexer.infoResponse = []byte(fmt.Sprintf("$%d\r\n%s", len(tmpSlice), tmpSlice))
-	myRedisMultiplexer.infoMutex.Unlock()
+func (this *RedisMultiplexer) generateMultiplexInfo() {
+	tmpSlice := fmt.Sprintf("rmux_version: %s\r\ngo_version: %s\r\nprocess_id: %d\r\nconnected_clients: %d\r\nactive_endpoints: %d\r\ntotal_endpoints: %d\r\nrole: master\r\n", "1.0", runtime.Version(), os.Getpid(), this.connectionCount, this.activeConnectionCount, len(this.ConnectionCluster))
+	this.infoMutex.Lock()
+	this.infoResponse = []byte(fmt.Sprintf("$%d\r\n%s", len(tmpSlice), tmpSlice))
+	this.infoMutex.Unlock()
 }
 
 //Called when a rmux server is ready to begin accepting connections
-func (myRedisMultiplexer *RedisMultiplexer) Start() (err error) {
-	myRedisMultiplexer.HashRing, err = connection.NewHashRing(myRedisMultiplexer.ConnectionCluster)
+func (this *RedisMultiplexer) Start() (err error) {
+	this.HashRing, err = connection.NewHashRing(this.ConnectionCluster)
 	if err != nil {
 		return err
 	}
 
-	go myRedisMultiplexer.maintainConnectionStates()
-	go myRedisMultiplexer.initializeCleanup()
+	go this.maintainConnectionStates()
+	go this.initializeCleanup()
+	if graphite.Enabled() {
+		go this.GraphiteCheckin()
+	}
 
-	for myRedisMultiplexer.active {
-		fd, err := myRedisMultiplexer.Listener.Accept()
+	for this.active {
+		fd, err := this.Listener.Accept()
 		if err != nil {
-			protocol.Debug("Start: Error received from listener.Accept", err.Error())
+//			Debug("Start: Error received from listener.Accept: %s", err.Error())
 			continue
 		}
+//		Debug("Accepted connection.")
+		graphite.Increment("accepted")
 
-		go myRedisMultiplexer.initializeClient(fd)
+		go this.initializeClient(fd)
 	}
 	time.Sleep(100 * time.Millisecond)
 	return
 }
 
 //Initializes a client's connection to our server.  Sets up our disconnect hooks and then passes the client off for request handling
-func (myRedisMultiplexer *RedisMultiplexer) initializeClient(localConnection net.Conn) {
+func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 	defer func() {
-		atomic.AddInt32(&myRedisMultiplexer.connectionCount, -1)
+		atomic.AddInt32(&this.connectionCount, -1)
 	}()
-	atomic.AddInt32(&myRedisMultiplexer.connectionCount, 1)
+	atomic.AddInt32(&this.connectionCount, 1)
 	//Add the connection to our internal list
-	myClient := NewClient(localConnection, myRedisMultiplexer.ClientReadTimeout, myRedisMultiplexer.ClientWriteTimeout)
+	myClient := NewClient(localConnection, this.ClientReadTimeout, this.ClientWriteTimeout,
+		this.multiplexing, this.HashRing)
+
 	defer func() {
-		r := recover()
-		if r != nil {
+		if r := recover(); r != nil {
+//			DebugPanic(r)
 			if val, ok := r.(string); ok {
-				protocol.FlushLine([]byte(val), myClient.ReadWriter.Writer)
+				// If we paniced, push that to the client before closing the connection
+				protocol.WriteError([]byte(val), myClient.Writer, true)
 			}
 		}
-		myClient.ConnectionReadWriter.NetConnection.Close()
+
+//		Debug("Closing client connection.")
+		myClient.Connection.Close()
 	}()
-	myRedisMultiplexer.HandleClientRequests(myClient)
+
+	this.HandleClientRequests(myClient)
 }
 
 //Sends the pre-generated Info response for a multiplexed server
-func (myRedisMultiplexer *RedisMultiplexer) sendMultiplexInfo(myClient *Client) (err error) {
-	myRedisMultiplexer.infoMutex.Lock()
-	err = protocol.FlushLine(myRedisMultiplexer.infoResponse, myClient.ReadWriter.Writer)
-	myRedisMultiplexer.infoMutex.Unlock()
+func (this *RedisMultiplexer) sendMultiplexInfo(myClient *Client) (err error) {
+	this.infoMutex.RLock()
+	err = protocol.WriteLine(this.infoResponse, myClient.Writer, true)
+	this.infoMutex.RUnlock()
 	return
+}
+
+func (this *RedisMultiplexer) GraphiteCheckin() {
+	for this.active {
+		time.Sleep(time.Millisecond * 100)
+		for _, pool := range this.ConnectionCluster {
+			pool.ReportGraphite()
+		}
+	}
 }
 
 //Handles requests for a client.
 //Inspects all incoming commands, to find if they are key-driven or not.
 //If they are, finds the appropriate connection pool, and passes the request off to it.
-func (myRedisMultiplexer *RedisMultiplexer) HandleClientRequests(myClient *Client) {
-	var err error
-	var firstLine []byte
-	var connectionPool *connection.ConnectionPool
-	for myRedisMultiplexer.active && myClient.Active {
-		firstLine, _, err = myClient.ReadWriter.ReadLine()
-		protocol.Debug("I read %s\r\n", firstLine)
-		if err != nil {
-			if err == io.EOF {
-				return
+func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
+	// Create background i/o thread
+	go client.ReadLoop(this)
+
+	defer func() {
+//		Debug("Client command handling loop closing")
+		// If the multiplexer goes down, deactivate this client.
+		client.Active = false
+	}()
+
+	for this.active && client.Active {
+		select {
+		case item := <-client.ReadChannel:
+			if item.command != nil {
+				this.HandleCommandChunk(client, item.command)
 			}
-			_, ok := err.(net.Error)
-			if ok && err.(net.Error).Timeout() {
-				//We had a read timeout.  Continue and try try again
-				continue
+			if item.err != nil {
+				this.HandleError(client, item.err)
 			}
-			panic("New Client Read Error: " + err.Error())
+		case <-time.After(time.Second * 1):
+			// Allow heartbeat checks to happen once a second
 		}
-		totalTime := time.Now()
+	}
 
-		responded, err := myClient.ParseCommand(firstLine, myRedisMultiplexer.multiplexing)
+	// TODO defer closing stuff?
+}
 
+// This looks a lot like HandleClientRequests above, but will break and flush to redis if there is nothing to read.
+// Will allow it to handle a pipeline of commands without spinning indefinitely.
+func (this *RedisMultiplexer) HandleCommandChunk(client *Client, command protocol.Command) {
+	this.HandleCommand(client, command)
+
+ChunkLoop:
+	for this.active && client.Active {
+		select {
+		case item := <-client.ReadChannel:
+			if item.command != nil {
+				this.HandleCommand(client, item.command)
+			}
+			if item.err != nil {
+				this.HandleError(client, item.err)
+			}
+		default:
+			break ChunkLoop
+		}
+	}
+
+	client.FlushRedisAndRespond()
+}
+
+func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
+//	Debug("Writing out %q", command)
+	immediateResponse, err := client.ParseCommand(command)
+
+	if immediateResponse != nil {
+		err = client.WriteLine(immediateResponse)
 		if err != nil {
-			protocol.Debug("Received error %s from ParseCommand\r\n", err)
+//			Debug("Error received when writing an immediate response: %s", err)
+		}
+
+		return
+	} else if err != nil {
+		if err == ERR_QUIT {
+			client.WriteLine(protocol.OK_RESPONSE)
+			client.ReadChannel <- readItem{nil, err}
 			return
-		} else if responded {
-			protocol.Debug("Apparently we already responded, continuing\r\n")
-			continue
-		}
-		//If we have an INFO command, and multiplexing is enabled..
-		if bytes.Equal(myClient.command[0:4], protocol.INFO_COMMAND) && myRedisMultiplexer.multiplexing {
-			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-			err = myRedisMultiplexer.sendMultiplexInfo(myClient)
-			if err != nil {
-				protocol.Debug("Receieved error %s from sendMultiplexInfo: %s\r\n", err)
-				return
-			}
-			continue
+		} else if recErr, ok := err.(*protocol.RecoverableError); ok {
+			client.WriteError(recErr, false)
+		} else {
+			panic("Not sure how to handle this error: " + err.Error())
 		}
 
-		//If we have a SUBSCRIBE command, hook it up...
-		if bytes.Equal(myClient.command[0:4], protocol.SUBSCRIBE_COMMAND) {
-			protocol.Debug("Received subscribe request on channel: %s\r\n", myClient.stringArgument)
-			subscription := myRedisMultiplexer.GetSubscription(myClient.stringArgument)
-			protocol.Debug("Got subscription\r\n")
-			subscription.AddClient(myClient)
-			err = myClient.SendSubscriptionResponse()
-			if err != nil {
-				protocol.Debug("Received error %s from SendSubscriptionResponse", err)
-				return
-			}
-			protocol.Debug("Confirmed subscription\r\n")
-			protocol.IgnoreMultiBulkMessage(firstLine, myClient.ReadWriter.Reader)
-			continue
-		}
+		return
+	}
 
-		startTime := time.Now()
-		connectionPool = myRedisMultiplexer.HashRing.GetConnectionPool(myClient.argumentCount, myClient.firstArgumentSlice[0:myClient.argumentLength])
-		protocol.Debug("Connection time: %s\r\n", time.Since(startTime))
+	// Otherwise, the command is ready to buffer to the connection.
+	client.Queue(command)
 
-		err = myClient.HandleRequest(connectionPool, firstLine)
-		if err != nil {
-			protocol.Debug("Error received from HandleRequest call: %s\r\n", err)
-		}
-		protocol.Debug("Total request time: %s\r\n", time.Since(totalTime))
+	// If we're multiplexing, just handle one command at a time
+	if this.multiplexing && client.HasQueued() {
+		client.FlushRedisAndRespond()
 	}
 }
 
-//Gets an active subscription for our client to connect to
-func (myRedisMultiplexer *RedisMultiplexer) GetSubscription(channelName string) (mySubscription *Subscription) {
-	myRedisMultiplexer.infoMutex.Lock()
-	defer myRedisMultiplexer.infoMutex.Unlock()
-	//if we need to make a new subscription, do so
-	mySubscription, ok := myRedisMultiplexer.SubscriptionCluster[channelName]
-	if !ok {
-		mySubscription = NewSubscription(10, channelName)
-		myRedisMultiplexer.SubscriptionCluster[channelName] = mySubscription
-		go mySubscription.BroadcastMessages()
+func (this *RedisMultiplexer) HandleError(client *Client, err error) {
+	if err == nil {
+		return
 	}
-	connectionPool := myRedisMultiplexer.HashRing.GetConnectionPool(2, []byte(channelName))
-	mySubscription.UpdateConnection(connectionPool.Endpoint, connectionPool)
-	return
+
+	if err == ERR_QUIT {
+		client.Active = false
+		return
+	} else if recErr, ok := err.(*protocol.RecoverableError); ok {
+		// Since we can recover, flush an error to the client
+		Error("Error from server: %s", recErr)
+		client.FlushError(recErr)
+		return
+	} else if err == io.EOF {
+		// Stream EOF-ed. Deactivate this client and break out.
+		client.FlushRedisAndRespond()
+		client.Active = false
+		return
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		// We had a read timeout. Let the client know that the connection is down
+		graphite.Increment("nettimeout")
+		client.FlushError(ERR_TIMEOUT)
+		return
+	} else {
+		// This is something we've never seen before! Panic panic panic
+		panic("New Client Read Error: " + err.Error())
+	}
+}
+
+func (rm *RedisMultiplexer) SetAllTimeouts(t time.Duration) {
+	rm.EndpointConnectTimeout = t
+	rm.EndpointReadTimeout = t
+	rm.EndpointWriteTimeout = t
+	rm.ClientReadTimeout = t
+	rm.ClientWriteTimeout = t
 }

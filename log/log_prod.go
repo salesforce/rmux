@@ -1,3 +1,5 @@
+// +build !dev
+
 /*
  * Copyright (c) 2015, Salesforce.com, Inc.
  * All rights reserved.
@@ -23,7 +25,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-//Package rmux provides a connection-pooling, multiplexing redis server.
-//Commands are parsed, and multiplexed out based on their arguments.
-//Package rmux/main includes a working server implementation, if no customization is needed
-package rmux
+package log
+
+func init() {
+	SetLogLevel(LOG_INFO)
+}
