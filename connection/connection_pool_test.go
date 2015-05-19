@@ -97,7 +97,7 @@ func TestCheckConnectionState(test *testing.T) {
 	} else {
 		localBuffer := bufio.NewReadWriter(bufio.NewReader(fd), bufio.NewWriter(fd))
 		test.Log("Shoving a single +PONG response in the buffer for testing")
-		protocol.FlushLine(protocol.PONG_RESPONSE, localBuffer.Writer)
+		protocol.WriteLine(protocol.PONG_RESPONSE, localBuffer.Writer, true)
 	}
 
 	temporaryConnection2 := connectionPool.GetConnection()

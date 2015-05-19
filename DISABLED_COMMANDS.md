@@ -41,7 +41,6 @@ msetnx
 rename
 renamenx
 rpoplpush
-script
 sdiff
 sdiffstore
 sinter

@@ -12,38 +12,38 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/forcedotcom/rmux"
 	"net"
-	"runtime"
-	"strings"
-	"syscall"
-	"runtime/pprof"
 	"os"
-	"errors"
-	"sync"
+	"runtime"
+	"runtime/pprof"
 	"strconv"
+	"strings"
+	"sync"
+	"syscall"
 )
 
 const DEFAULT_POOL_SIZE = 20
 
-var host                 = flag.String("host", "localhost", "The host to listen for incoming connections on")
-var port                 = flag.Int("port", 6379, "The port to listen for incoming connections on")
-var socket               = flag.String("socket", "", "The socket to listen for incoming connections on.  If this is provided, host and port are ignored")
-var maxProcesses         = flag.Int("maxProcesses", 0, "The number of processes to use.  If this is not defined, go's default is used.")
-var poolSize             = flag.Int("poolSize", DEFAULT_POOL_SIZE, "The size of the connection pools to use")
-var tcpConnections       = flag.String("tcpConnections", "localhost:6380 localhost:6381", "TCP connections (destination redis servers) to multiplex over")
-var unixConnections      = flag.String("unixConnections", "", "Unix connections (destination redis servers) to multiplex over")
-var localTimeout         = flag.Duration("localTimeout", 0, "Timeout to set locally (read+write)")
-var localReadTimeout     = flag.Duration("localReadTimeout", 0, "Timeout to set locally (read)")
-var localWriteTimeout    = flag.Duration("localWriteTimeout", 0, "Timeout to set locally (write)")
-var remoteTimeout        = flag.Duration("remoteTimeout", 0, "Timeout to set for remote redises (connect+read+write)")
-var remoteReadTimeout    = flag.Duration("remoteReadTimeout", 0, "Timeout to set for remote redises (read)")
-var remoteWriteTimeout   = flag.Duration("remoteWriteTimeout", 0, "Timeout to set for remote redises (write)")
+var host = flag.String("host", "localhost", "The host to listen for incoming connections on")
+var port = flag.Int("port", 6379, "The port to listen for incoming connections on")
+var socket = flag.String("socket", "", "The socket to listen for incoming connections on.  If this is provided, host and port are ignored")
+var maxProcesses = flag.Int("maxProcesses", 0, "The number of processes to use.  If this is not defined, go's default is used.")
+var poolSize = flag.Int("poolSize", DEFAULT_POOL_SIZE, "The size of the connection pools to use")
+var tcpConnections = flag.String("tcpConnections", "localhost:6380 localhost:6381", "TCP connections (destination redis servers) to multiplex over")
+var unixConnections = flag.String("unixConnections", "", "Unix connections (destination redis servers) to multiplex over")
+var localTimeout = flag.Duration("localTimeout", 0, "Timeout to set locally (read+write)")
+var localReadTimeout = flag.Duration("localReadTimeout", 0, "Timeout to set locally (read)")
+var localWriteTimeout = flag.Duration("localWriteTimeout", 0, "Timeout to set locally (write)")
+var remoteTimeout = flag.Duration("remoteTimeout", 0, "Timeout to set for remote redises (connect+read+write)")
+var remoteReadTimeout = flag.Duration("remoteReadTimeout", 0, "Timeout to set for remote redises (read)")
+var remoteWriteTimeout = flag.Duration("remoteWriteTimeout", 0, "Timeout to set for remote redises (write)")
 var remoteConnectTimeout = flag.Duration("remoteConnectTimeout", 0, "Timeout to set for remote redises (connect)")
-var cpuProfile           = flag.String("cpuProfile", "", "Direct CPU Profile to target file")
-var configFile           = flag.String("config", "", "Configuration file (JSON)")
+var cpuProfile = flag.String("cpuProfile", "", "Direct CPU Profile to target file")
+var configFile = flag.String("config", "", "Configuration file (JSON)")
 
 func main() {
 	flag.Parse()
@@ -58,7 +58,6 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-
 
 	if *configFile != "" {
 		configs, err = ReadConfigFromFile(*configFile)
@@ -90,25 +89,25 @@ func configureFromArgs() ([]PoolConfig, error) {
 		arrUnixConnections = []string{}
 	}
 
-	config := []PoolConfig { {
-		Host                 : *host,
-		Port                 : *port,
-		Socket               : *socket,
-		MaxProcesses         : *maxProcesses,
-		PoolSize             : *poolSize,
+	config := []PoolConfig{{
+		Host:         *host,
+		Port:         *port,
+		Socket:       *socket,
+		MaxProcesses: *maxProcesses,
+		PoolSize:     *poolSize,
 
-		TcpConnections       : arrTcpConnections,
-		UnixConnections      : arrUnixConnections,
+		TcpConnections:  arrTcpConnections,
+		UnixConnections: arrUnixConnections,
 
-		LocalTimeout         : *localTimeout,
-		LocalReadTimeout     : *localReadTimeout,
-		LocalWriteTimeout    : *localWriteTimeout,
+		LocalTimeout:      *localTimeout,
+		LocalReadTimeout:  *localReadTimeout,
+		LocalWriteTimeout: *localWriteTimeout,
 
-		RemoteTimeout        : *remoteTimeout,
-		RemoteReadTimeout    : *remoteReadTimeout,
-		RemoteWriteTimeout   : *remoteWriteTimeout,
-		RemoteConnectTimeout : *remoteConnectTimeout,
-	} }
+		RemoteTimeout:        *remoteTimeout,
+		RemoteReadTimeout:    *remoteReadTimeout,
+		RemoteWriteTimeout:   *remoteWriteTimeout,
+		RemoteConnectTimeout: *remoteConnectTimeout,
+	}}
 
 	return config, nil
 }

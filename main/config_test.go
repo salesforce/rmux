@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"reflect"
+	"testing"
 )
 
 var json1 = []byte(`
@@ -25,10 +25,10 @@ func TestParseConfigJson_Json1(test *testing.T) {
 	}
 
 	expects := []PoolConfig{{
-		Socket: "/tmp/rmux-redis1.sock",
+		Socket:         "/tmp/rmux-redis1.sock",
 		TcpConnections: []string{"localhost:8001"},
 	}, {
-		Socket: "/tmp/rmux-redis2.sock",
+		Socket:         "/tmp/rmux-redis2.sock",
 		TcpConnections: []string{"localhost:8002"},
 	}}
 
@@ -64,20 +64,20 @@ func TestParseConfigJson_Json2(test *testing.T) {
 	}
 
 	expects := []PoolConfig{{
-		Host: "localhost",
-		Port: 10001,
+		Host:         "localhost",
+		Port:         10001,
 		MaxProcesses: 2,
-		PoolSize: 30,
+		PoolSize:     30,
 
 		TcpConnections: []string{"localhost:8001", "localhost:8002"},
 
-		LocalTimeout: 30,
-		LocalReadTimeout: 35,
+		LocalTimeout:      30,
+		LocalReadTimeout:  35,
 		LocalWriteTimeout: 40,
 
-		RemoteTimeout: 45,
-		RemoteReadTimeout: 50,
-		RemoteWriteTimeout: 55,
+		RemoteTimeout:        45,
+		RemoteReadTimeout:    50,
+		RemoteWriteTimeout:   55,
 		RemoteConnectTimeout: 60,
 	}}
 

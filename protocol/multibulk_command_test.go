@@ -1,4 +1,3 @@
-// +build dev
 //Copyright (c) 2013, Salesforce.com, Inc.
 //All rights reserved.
 //
@@ -12,14 +11,69 @@
 
 package protocol
 
-import "fmt"
-
-const (
-	DEBUG = true
+import (
+	"testing"
 )
 
-//If built with the 'dev' tag, routes through Printf.  If not, does nothing.
-//This is exposed publicly so that other packages that use this can optionally use the same build flag
-func Debug(format string, a ...interface{}) {
-	fmt.Printf(format + "\r\n", a...)
+var multibulkTestData = map[string]commandTestData{
+	"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n": commandTestData{
+		"keys",
+		"*",
+		"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n",
+		1,
+	},
+
+	"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n": commandTestData{
+		"keys",
+		"*",
+		"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n",
+		1,
+	},
+
+	"*1\r\n$4\r\nquit\r\n": commandTestData{
+		"quit",
+		"",
+		"*1\r\n$4\r\nquit\r\n",
+		0,
+	},
+
+	"*1\r\n$4\r\nQUIT\r\n": commandTestData{
+		"quit",
+		"",
+		"*1\r\n$4\r\nquit\r\n",
+		0,
+	},
+
+	// Larger than the internal buffer (64), will have to reallocate internally
+	"*2\r\n$40\r\n1234567890123456789012345678901234567890\r\n$30\r\n123456789012345678901234567890\r\n": commandTestData{
+		"1234567890123456789012345678901234567890",
+		"123456789012345678901234567890",
+		"*2\r\n$40\r\n1234567890123456789012345678901234567890\r\n$30\r\n123456789012345678901234567890\r\n",
+		1,
+	},
+
+	"*5\r\n$3\r\nDEL\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n": commandTestData{
+		"del",
+		"key1",
+		"*5\r\n$3\r\ndel\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n",
+		4,
+	},
+
+	// Handle Null Bulk Strings (http://redis.io/topics/protocol)
+	"*2\r\n$3\r\ndel\r\n$-1\r\n": commandTestData{
+		"del",
+		string(NIL_STRING),
+		"*2\r\n$3\r\ndel\r\n$-1\r\n",
+		1,
+	},
+}
+
+func TestMultibulkCommand(test *testing.T) {
+	tester := commandTester{test}
+
+	for input, expected := range multibulkTestData {
+		command, err := ReadMultibulkCommand(getReader(input))
+
+		tester.checkCommandOutput(expected, command, err)
+	}
 }

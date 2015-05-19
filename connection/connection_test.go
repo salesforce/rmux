@@ -203,9 +203,9 @@ func TestCheckConnection(test *testing.T) {
 	} else {
 		localBuffer := bufio.NewReadWriter(bufio.NewReader(fd), bufio.NewWriter(fd))
 		test.Log("Shoving a +PONG response in the buffer for testing")
-		protocol.FlushLine(protocol.PONG_RESPONSE, localBuffer.Writer)
+		protocol.WriteLine(protocol.PONG_RESPONSE, localBuffer.Writer, true)
 		test.Log("Shoving a PONG response (no plus sign, so invalid) in the buffer for failure testing")
-		protocol.FlushLine([]byte{'P', 'O', 'N', 'G'}, localBuffer.Writer)
+		protocol.WriteLine([]byte{'P', 'O', 'N', 'G'}, localBuffer.Writer, true)
 	}
 
 	if connection == nil {

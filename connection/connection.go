@@ -51,7 +51,7 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 //If an error is returned, or if an invalid response is returned from the select, then this will return an error
 //If not, the connections internal database will be updated accordingly
 func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
-	err = protocol.FlushLine([]byte(fmt.Sprintf("select %d", DatabaseId)), myConnection.ReadWriter.Writer)
+	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), myConnection.ReadWriter.Writer, true)
 	if err != nil {
 		protocol.Debug("SelectDatabase: Error received from protocol.FlushLine: %s", err)
 		return
@@ -71,34 +71,10 @@ func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
 	return
 }
 
-//Subscribes to the given channel
-//If an error is returned, or if an invalid response is returned from the subscribe, then this will return an error
-func (myConnection *Connection) SubscribeChannel(channel string) (err error) {
-	err = protocol.FlushLine([]byte(fmt.Sprintf("subscribe %s", channel)), myConnection.ReadWriter.Writer)
-	if err != nil {
-		protocol.Debug("SubscribeChannel: Error received from protocol.FlushLine: %s", err)
-		return
-	}
-	buf, _, err := myConnection.ReadWriter.ReadLine()
-	if err != nil {
-		protocol.Debug("SubscribeChannel: Error received from ReadLine: %s", err)
-		return
-	}
-
-	if !bytes.Equal(buf, []byte{'*', '3'}) {
-		protocol.Debug("SubscribeChannel: Invalid response for subscribe: %s", buf)
-		err = errors.New("Invalid subscribe response")
-		return
-	}
-
-	protocol.IgnoreMultiBulkMessage(buf, myConnection.ReadWriter.Reader)
-	return
-}
-
 //Checks if the current connection is up or not
 //If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
 func (myConnection *Connection) CheckConnection() bool {
-	err := protocol.FlushLine(protocol.SHORT_PING_COMMAND, myConnection.ReadWriter.Writer)
+	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
 		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
 		return false

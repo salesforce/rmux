@@ -1,7 +1,13 @@
-all: test build-dev build
+all: clean test build-dev build
+
+clean:
+	rm -f ./build/*
 
 test:
-	go test ./... -tags 'dev'
+	go test ./...
+
+test-dev:
+	go test -tags 'dev' ./...
 
 mkbuild:
 	mkdir -p ./build
