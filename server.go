@@ -164,7 +164,6 @@ func (this *RedisMultiplexer) Start() (err error) {
 	go this.maintainConnectionStates()
 	go this.initializeCleanup()
 
-	protocol.Debug("Test?")
 	for this.active {
 		fd, err := this.Listener.Accept()
 		if err != nil {
@@ -190,14 +189,15 @@ func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 		this.multiplexing)
 
 	defer func() {
-		r := recover()
-		if r != nil {
+		if r := recover(); r != nil {
+			protocol.DebugPanic(r)
 			if val, ok := r.(string); ok {
 				// If we paniced, push that to the client before closing the connection
 				protocol.WriteError([]byte(val), myClient.Writer, true)
 			}
 		}
-		myClient.ConnectionReadWriter.NetConnection.Close()
+
+		myClient.Connection.Close()
 	}()
 
 	this.HandleClientRequests(myClient)
@@ -215,70 +215,30 @@ func (this *RedisMultiplexer) sendMultiplexInfo(myClient *Client) (err error) {
 //Inspects all incoming commands, to find if they are key-driven or not.
 //If they are, finds the appropriate connection pool, and passes the request off to it.
 func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
-	if this.multiplexing {
-		this.handleMultiplexingClientRequests(client)
-	} else {
-		this.handleNonMultiplexingClientRequests(client)
-	}
-}
+	// Create background i/o thread
+	go client.ReadLoop()
+	defer func() {
+		// If the multiplexer goes down, deactivate this client.
+		client.Active = false
+	}()
 
-func (this *RedisMultiplexer) handleMultiplexingClientRequests(client *Client) error {
-	var connectionPool *connection.ConnectionPool
-
-ClientLoop:
 	for this.active && client.Active {
-		// TODO: Block on available? Select?
-
-		// Read a buffered command
-		command, err := client.ReadBufferedCommand()
-		if err != nil {
-			if recErr, ok := err.(*protocol.RecoverableError); ok {
-				// Since we can recover, flush an error to the client and loop up
-				client.FlushError(recErr)
-				continue
-			} else if err == io.EOF {
-				// Stream EOF-ed. Deactivate this client and break out.
-				client.Active = false
-				break
-			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				//We had a read timeout.  Continue and try try again
-				continue
-			} else {
-				// This is something we've never seen before! Panic panic panic
-				panic("New Client Read Error: " + err.Error())
-			}
+		select {
+		case commands := <-client.ReadChannel:
+			protocol.Debug("Got %d command(s)!", len(commands))
+			this.HandleCommands(client, commands)
+		case error := <-client.ErrorChannel:
+			protocol.Debug("Got error: %s", error)
+			this.HandleError(client, error)
+		default:
+		// TODO: If not multiplexing flush to default connection?
 		}
-
-		// Parse it - some need an immediate response
-		immediateResponse, err := client.ParseCommand(command)
-		if immediateResponse != nil {
-			_ = client.FlushLine(immediateResponse) // TODO: handle error
-			continue
-		} else if err != nil {
-			if err == ERR_QUIT {
-				// Respond with OK, deactivate ourselves
-				_ = client.FlushLine(protocol.OK_RESPONSE)
-				client.Active = false
-				break ClientLoop
-			} else if recErr, ok := err.(*protocol.RecoverableError); ok {
-				_ = client.FlushError(recErr) // TODO: Handle error
-				continue
-			} else {
-				panic("Not sure how to handle this error: " + err.Error())
-			}
-		}
-
-		// Write the command out to server
-		connectionPool = this.HashRing.GetConnectionPool(command)
-		connection := connectionPool.GetConnection()        // TODO: Nil handling
-		_ = client.HandleRequest(connection, command, true) // TODO: Error handling
-		connectionPool.RecycleRemoteConnection(connection)
 	}
 
-	return nil
+	// TODO defer closing stuff?
 }
 
-func (this *RedisMultiplexer) handleNonMultiplexingClientRequests(client *Client) error {
+func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol.Command) {
 	var connection *connection.Connection
 	connectionPool := this.HashRing.DefaultConnectionPool // TODO: This doesn't have a default connection pool assigned
 
@@ -288,97 +248,99 @@ func (this *RedisMultiplexer) handleNonMultiplexingClientRequests(client *Client
 		}
 	}()
 
-ClientLoop:
-	for this.active && client.Active {
-		// TODO: Block on available? Select?
-		bufferedCommands, err := client.ReadBufferedCommands()
-		if err != nil {
-			if recErr, ok := err.(*protocol.RecoverableError); ok {
-				// Since we can recover, flush an error to the client and loop up
-				client.FlushError(recErr)
-				continue ClientLoop
-			} else if err == io.EOF {
-				// Stream EOF-ed. Deactivate this client and break out.
-				client.Active = false
-				break
-			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				//We had a read timeout.  Continue and try try again
-				continue
-			} else {
-				// This is something we've never seen before! Panic panic panic
-				panic("New Client Read Error: " + err.Error())
+CommandLoop:
+	for _, command := range commands {
+		protocol.Debug("Got command %s %d", command.GetCommand(), command.GetArgCount())
+		immediateResponse, err := client.ParseCommand(command)
+
+		if immediateResponse != nil || err != nil && connection != nil && connection.Writer.Buffered() > 0 {
+			// Need to respond to the client. Flush anything pending.
+			if err := client.FlushRedisAndRespond(connection); err != nil {
+				protocol.Debug("Error from FlushRedisAndRespond: %s", err)
 			}
-		} else if len(bufferedCommands) == 0 {
-			continue
 		}
 
-		protocol.Debug("Read buffered commands: %v", bufferedCommands)
-
-		for _, command := range bufferedCommands {
-			immediateResponse, err := client.ParseCommand(command)
-
-			if immediateResponse != nil || err != nil {
-				// Need to respond to the client. Flush anything pending.
-				if err := client.FlushRedisAndRespond(connection); err != nil {
-					protocol.Debug("Error from FlushRedisAndRespond: %s", err)
-				}
-			}
-
-			if immediateResponse != nil {
-				err = client.FlushLine(immediateResponse)
-				if err != nil {
-					protocol.Debug("Error received when flushing an immediate response: %s", err)
-				}
-				continue
-			} else if err != nil {
-				if err == ERR_QUIT {
-					// Respond with OK, deactivate ourselves
-					client.FlushLine(protocol.OK_RESPONSE)
-					client.Active = false
-				} else if recErr, ok := err.(*protocol.RecoverableError); ok {
-					// Flush stuff back to the client, get rid of the rest on the read buffer.
-					client.FlushError(recErr)
-					client.DiscardReaderBuffered()
-				} else {
-					panic("Not sure how to handle this error: " + err.Error())
-				}
-
-				continue ClientLoop
-			}
-
-			// Otherwise, the command is ready to buffer to the connection.
-			// TODO: Maybe we should use a write buffer in front of it before grabbing the connection?
-			if connection == nil {
-				connection = connectionPool.GetConnection()
-
-				//If we don't have a connection, something went horribly wrong
-				if connection == nil {
-					protocol.Debug("Failed to retrieve an active connection from the provided connection pool")
-					return protocol.WriteError(CONNECTION_DOWN_RESPONSE, client.Writer, true)
-				}
-			}
-
-			// Write the command out to server
-			// TODO: See what happens when the output buffer is filled... can it be filled?
-			_ = protocol.WriteCommand(command, connection.Writer, false)
+		if immediateResponse != nil {
+			err = client.FlushLine(immediateResponse)
 			if err != nil {
-				// TODO: Error handling - flush the buffer on both sides
-				continue
+				protocol.Debug("Error received when flushing an immediate response: %s", err)
+			}
+			continue
+		} else if err != nil {
+			protocol.Debug("Got error %s", err.Error())
+			if err == ERR_QUIT {
+				// Respond with OK, deactivate ourselves
+				client.FlushLine(protocol.OK_RESPONSE)
+				client.Active = false
+			} else if recErr, ok := err.(*protocol.RecoverableError); ok {
+				// Flush stuff back to the client, get rid of the rest on the read buffer.
+				client.FlushError(recErr)
+				client.DiscardReaderBuffered()
+			} else {
+				panic("Not sure how to handle this error: " + err.Error())
+			}
+
+			continue CommandLoop
+		}
+
+		// Otherwise, the command is ready to buffer to the connection.
+		// TODO: Maybe we should use a write buffer in front of it before grabbing the connection?
+		if connection == nil {
+			connection = connectionPool.GetConnection()
+
+			//If we don't have a connection, something went horribly wrong
+			if connection == nil {
+				protocol.Debug("Failed to retrieve an active connection from the provided connection pool")
+				protocol.WriteError(CONNECTION_DOWN_RESPONSE, client.Writer, true)
+				return
 			}
 		}
 
-		if connection != nil && connection.Writer.Buffered() > 0 {
-			client.FlushRedisAndRespond(connection) // TODO: error handling
-		}
-
-		if client.Writer.Buffered() > 0 {
-			client.Writer.Flush()
-		}
-
-		if connection != nil {
-			connectionPool.RecycleRemoteConnection(connection)
+		// Write the command out to server
+		// TODO: See what happens when the output buffer is filled... can it be filled?
+		err = protocol.WriteCommand(command, connection.Writer, false)
+		if err != nil {
+			// TODO: Error handling - flush the buffer on both sides
+			protocol.Debug("Error writing to redis: %s", err.Error())
+			continue
 		}
 	}
 
-	return nil
+	protocol.Debug("Is there buffered stuff?")
+	if connection != nil && connection.Writer.Buffered() > 0 {
+		protocol.Debug("Buffered stuff, gonna write")
+		client.FlushRedisAndRespond(connection) // TODO: error handling
+		protocol.Debug("Shoulda responded by now")
+	}
+
+	if client.Writer.Buffered() > 0 {
+		client.Writer.Flush()
+	}
+
+	if connection != nil {
+		connectionPool.RecycleRemoteConnection(connection)
+	}
 }
+
+func (this *RedisMultiplexer) HandleError(client *Client, err error) {
+	if err == nil {
+		return
+	}
+
+	if recErr, ok := err.(*protocol.RecoverableError); ok {
+		// Since we can recover, flush an error to the client
+		client.FlushError(recErr)
+		return
+	} else if err == io.EOF {
+		// Stream EOF-ed. Deactivate this client and break out.
+		client.Active = false
+		return
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		//We had a read timeout.  Continue and try try again
+		return
+	} else {
+		// This is something we've never seen before! Panic panic panic
+		panic("New Client Read Error: " + err.Error())
+	}
+}
+

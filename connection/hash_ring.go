@@ -58,6 +58,9 @@ func (myHashRing *HashRing) distributeConnectionPools(prime int, connectionPools
 	}
 
 	copy(myHashRing.ConnectionPools[prime*(prime-1):], myHashRing.ConnectionPools)
+	if len(myHashRing.ConnectionPools) > 0 {
+		myHashRing.DefaultConnectionPool = myHashRing.ConnectionPools[0]
+	}
 }
 
 func (myHashRing *HashRing) getNextPrime(poolLength int) (int, error) {

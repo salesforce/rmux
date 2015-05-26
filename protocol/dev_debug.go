@@ -12,7 +12,10 @@
 
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	"runtime/debug"
+)
 
 const (
 	DEBUG = true
@@ -22,4 +25,8 @@ const (
 //This is exposed publicly so that other packages that use this can optionally use the same build flag
 func Debug(format string, a ...interface{}) {
 	fmt.Printf(format + "\r\n", a...)
+}
+
+func DebugPanic(recover interface{}) {
+	fmt.Printf("Panic: %s \r\n%s\r\n", recover, debug.Stack())
 }

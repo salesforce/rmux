@@ -324,12 +324,16 @@ func ParseInt(response []byte) (length int, err error) {
 
 //Inspects the incoming payload and returns the command.
 func ReadCommand(source *bufio.Reader) (command Command, err error) {
+	if source.Buffered() > 0 {
+		Debug("Buffered %d", source.Buffered())
+	}
 	peeked, err := source.Peek(1)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	peek := peeked[0]
+	Debug("Peeked: %c", peek)
 	switch {
 	case peek == '+':
 		command, err = ReadSimpleCommand(source)
@@ -341,7 +345,7 @@ func ReadCommand(source *bufio.Reader) (command Command, err error) {
 		command, err = nil, ERROR_INVALID_COMMAND_FORMAT
 	}
 
-	return
+	return command, err
 }
 
 //Writes the command to the buffer

@@ -20,3 +20,6 @@ const (
 //This is exposed publicly so that other packages that use this can optionally use the same build flag
 func Debug(format string, a ...interface{}) {
 }
+
+func DebugPanic(recover interface{}) {
+}

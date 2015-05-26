@@ -19,6 +19,7 @@ import (
 	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"time"
+	"io"
 )
 
 //Represents a redis client that is connected to our rmux server
@@ -28,12 +29,15 @@ type Client struct {
 	//Whether or not this client needs to consider multiplexing
 	Multiplexing bool
 	//The connection wrapper for our net connection
-	ConnectionReadWriter *protocol.TimedNetReadWriter
+	ConnectionReadWriter io.ReadWriter
+	Connection net.Conn
 	//The Database that our client thinks we're connected to
 	DatabaseId int
 	//Whether or not this client connection is active or not
 	//Upon QUIT command, this gets toggled off
 	Active bool
+	ReadChannel chan []protocol.Command
+	ErrorChannel chan error
 }
 
 var (
@@ -41,13 +45,18 @@ var (
 	ERR_QUIT            = errors.New("Client asked to quit")
 )
 
+var client_refuse_pile = make([]byte, 4096)
+
 //Initializes a new client, for the given established net connection, with the specified read/write timeouts
 func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isMuliplexing bool) (newClient *Client) {
 	newClient = &Client{}
-	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, readTimeout, writeTimeout)
-	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newClient.ConnectionReadWriter), bufio.NewWriter(newClient.ConnectionReadWriter))
+	newClient.Connection = connection
+	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection))
+	newClient.ConnectionReadWriter = newClient.ReadWriter
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
+	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane, these things don't grow automatically... or configurable
+	newClient.ErrorChannel = make(chan error)
 	return
 }
 
@@ -111,27 +120,38 @@ func (this *Client) HandleRequest(activeConnection *connection.Connection, comma
 func (this *Client) ReadBufferedCommands() (buffered []protocol.Command, err error) {
 	buffered = []protocol.Command{}
 
-	for this.Reader.Buffered() > 0 {
+	for first := true; first || this.HasAvailable(); first = false { // fake do while loop
 		var command protocol.Command
 
 		// When multiplexing don't read the entire input buffer.
-		if this.Multiplexing && len(buffered) > 0 {
-			return
+		if this.Multiplexing && !first {
+			return buffered, nil
 		}
 
-		protocol.Debug("Doop")
 		command, err = this.ReadBufferedCommand()
 		if err != nil {
-			// Discard the rest on the read buffer.
-			protocol.Debug("Error reading buffered command: %s", err.Error())
-			this.DiscardReaderBuffered()
-			return
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				//We had a read timeout. Return what we have.
+				return buffered, nil
+			} else if err == io.EOF {
+				protocol.Debug("EOF!")
+				return nil, err
+			} else {
+				// Discard the rest on the read buffer.
+				protocol.Debug("Error reading buffered command: %s", err.Error())
+				this.DiscardReaderBuffered()
+				return nil, err
+			}
 		}
 
 		buffered = append(buffered, command)
 	}
 
-	return
+	return buffered, nil
+}
+
+func (this *Client) HasAvailable() bool {
+	return this.Reader.Buffered() > 0
 }
 
 func (this *Client) WriteError(err error, flush bool) error {
@@ -142,13 +162,11 @@ func (this *Client) FlushError(err error) error {
 	return this.WriteError(err, true)
 }
 
+//Reads a buffered command.
 func (this *Client) ReadBufferedCommand() (command protocol.Command, err error) {
-	if this.Reader.Buffered() == 0 {
-		return nil, ERR_NOTHING_TO_READ
-	}
-
 	command, err = protocol.ReadCommand(this.Reader)
 	if err != nil {
+		protocol.Debug("Error in ReadBufferedCommand: %s", err.Error())
 		return nil, err
 	}
 
@@ -157,10 +175,8 @@ func (this *Client) ReadBufferedCommand() (command protocol.Command, err error) 
 
 func (this *Client) DiscardReaderBuffered() {
 	// At the time of this writing Reader.Discard only exists in golang unstable.
-	// TODO: Benchmark using a sort of 'refuse pile' to read the full chunk at once
-	buffered := this.Reader.Buffered()
-	for i := 0; i < buffered; i++ {
-		this.Reader.ReadByte()
+	for this.HasAvailable() {
+		this.Reader.Read(client_refuse_pile)
 	}
 	return
 }
@@ -175,19 +191,37 @@ func (this *Client) FlushRedisAndRespond(redisConn *connection.Connection) error
 		return nil
 	}
 
-	// Flush any pending requests
-	if redisConn.Writer.Buffered() > 0 {
-		if err := redisConn.Writer.Flush(); err != nil {
-			return err
-		}
+	if redisConn.Writer.Buffered() == 0 {
+		return nil
 	}
 
-	// Read the response
-	for redisConn.Reader.Buffered() > 0 {
-		if _, err := this.Writer.ReadFrom(redisConn.Reader); err != nil {
-			return err
-		}
+	// Flush any pending requests
+	if err := redisConn.Writer.Flush(); err != nil {
+		return err
+	}
+
+	// Read the response TODO ensure as many commands as sent were responded to
+	if _, err := this.Writer.ReadFrom(redisConn.Reader); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func (this *Client) HasBufferedOutput() bool {
+	return this.Writer.Buffered() > 0
+}
+
+// Read loop for this client - moves commands and channels to the worker loop
+func (this *Client) ReadLoop() {
+	// TODO: This needs to stop when the client dies is deactivated.
+	for this.Active {
+		// Read any commands
+		commands, err := this.ReadBufferedCommands()
+		if err != nil {
+			this.ErrorChannel<- err
+		} else if len(commands) > 0 {
+			this.ReadChannel<- commands
+		}
+	}
 }
