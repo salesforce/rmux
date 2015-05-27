@@ -24,9 +24,9 @@ type commandTester struct {
 	*testing.T
 }
 
-func (this *commandTester) checkCommandOutput(expects commandTestData, command Command, err error) {
+func (this *commandTester) checkCommandOutput(expects commandTestData, command Command, err error, input string) {
 	if err != nil {
-		this.Fatalf("Error reading a redis array: %s", err)
+		this.Fatalf("Error parsing %q: %s", input, err)
 	}
 
 	if bytes.Compare([]byte(expects.buffer), command.GetBuffer()) != 0 {

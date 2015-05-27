@@ -74,6 +74,6 @@ func TestMultibulkCommand(test *testing.T) {
 	for input, expected := range multibulkTestData {
 		command, err := ReadMultibulkCommand(getReader(input))
 
-		tester.checkCommandOutput(expected, command, err)
+		tester.checkCommandOutput(expected, command, err, input)
 	}
 }

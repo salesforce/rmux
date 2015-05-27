@@ -112,6 +112,6 @@ func TestInlineCommand(test *testing.T) {
 	for input, expected := range inlineTestData {
 		command, err := ReadInlineCommand(getReader(input))
 
-		tester.checkCommandOutput(expected, command, err)
+		tester.checkCommandOutput(expected, command, err, input)
 	}
 }

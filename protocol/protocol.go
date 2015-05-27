@@ -341,6 +341,8 @@ func ReadCommand(source *bufio.Reader) (command Command, err error) {
 		command, err = ReadMultibulkCommand(source)
 	case (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z'):
 		command, err = ReadInlineCommand(source)
+	case peek == '$':
+		command, err = ReadStringCommand(source)
 	default:
 		command, err = nil, ERROR_INVALID_COMMAND_FORMAT
 	}
@@ -401,11 +403,17 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
 func CopyServerResponse(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numCommands int) error {
-	for remoteBuffer.Buffered() > 0 {
-		if _, err := remoteBuffer.WriteTo(localBuffer); err != nil {
+	for i := 0; i < numCommands; i++ {
+		// TODO: Error handling
+		command, err := ReadCommand(remoteBuffer)
+		if err != nil {
+			Debug("Got an error oh god panic %q", err.Error())
 			return err
 		}
+		localBuffer.Write(command.GetBuffer())
 	}
+
+	localBuffer.Flush()
 
 	return nil
 }

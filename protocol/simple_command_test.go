@@ -62,6 +62,6 @@ func TestSimpleCommand(test *testing.T) {
 	for input, expected := range simpleTestData {
 		command, err := ReadSimpleCommand(getReader(input))
 
-		tester.checkCommandOutput(expected, command, err)
+		tester.checkCommandOutput(expected, command, err, input)
 	}
 }
