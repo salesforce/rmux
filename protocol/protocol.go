@@ -296,7 +296,7 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 }
 
 //Parses a string into an int.
-//Differs from atoi in that this only parses positive ints--hex, octal, and negatives are not allowed
+//Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
 //Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
 func ParseInt(response []byte) (length int, err error) {
 	if len(response) == 0 {
@@ -306,8 +306,14 @@ func ParseInt(response []byte) (length int, err error) {
 	}
 
 	length = 0
+	isNegative := false
 	//It's worth re-inventing the wheel, if you have a good understanding of your particular wheel's usage
-	for _, b := range response {
+	for i, b := range response {
+		if i == 0 && b == '-' {
+			isNegative = true
+			continue
+		}
+
 		//Subtract 48 from our byte.  bytes are uint8s, so if the value is below 48, it will wrap-around back to 255 and dec. from there
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
@@ -319,6 +325,11 @@ func ParseInt(response []byte) (length int, err error) {
 		length *= 10
 		length += int(b)
 	}
+
+	if isNegative {
+		length *= -1
+	}
+
 	return
 }
 

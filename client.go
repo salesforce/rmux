@@ -186,6 +186,12 @@ func (this *Client) FlushRedisAndRespond() error {
 		return nil
 	}
 
+	if redisConn.DatabaseId != this.DatabaseId {
+		if err := redisConn.SelectDatabase(this.DatabaseId); err != nil {
+			protocol.Debug("Error while attempting to select database: %s", err)
+		}
+	}
+
 	numCommands := len(this.queued)
 	protocol.Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
