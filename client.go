@@ -130,6 +130,7 @@ func (this *Client) ReadBufferedCommands() (buffered []protocol.Command, err err
 }
 
 func (this *Client) HasAvailable() bool {
+	// TODO Buffered doesn't really work here
 	return this.Reader.Buffered() > 0
 }
 

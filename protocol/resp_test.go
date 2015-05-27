@@ -43,6 +43,7 @@ func TestReadRBulkString(t *testing.T) {
 		{"$7\r\ndiscard\r\n", "discard"},
 		{"$42\r\nsomeverylongcommandthatprobablydoesntexist\r\n", "someverylongcommandthatprobablydoesntexist"},
 		{"$42\r\nSOMEVERYLONGCOMMANDTHATPROBABLYDOESNTEXIST\r\n", "SOMEVERYLONGCOMMANDTHATPROBABLYDOESNTEXIST"},
+		{"$-1\r\n", ""},
 	}
 
 	for _, expected := range testData {
@@ -175,7 +176,7 @@ func TestReadRArray(t *testing.T) {
 		},
 		{
 			"*5\r\n$3\r\nDEL\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n",
-			"del",
+			"DEL",
 			"key1",
 			4,
 		},
@@ -184,7 +185,6 @@ func TestReadRArray(t *testing.T) {
 	}
 
 	for _, expected := range testData {
-		t.Logf("Testing %q", expected.input)
 		reader := getReader(expected.input)
 
 		val, err := ReadRArray(reader)

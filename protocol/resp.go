@@ -91,9 +91,11 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 	}
 	bs.Buffer = append(bs.Buffer, firstByte)
 
-	lenStr, _, err := reader.ReadLine()
+	lenStr, isPrefix, err := reader.ReadLine()
 	if err != nil {
 		return nil, err
+	} else if isPrefix {
+		return nil, ERROR_INVALID_COMMAND_FORMAT
 	}
 	length, err := ParseInt(lenStr)
 	if err != nil {
@@ -102,6 +104,11 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 
 	bs.Buffer = append(bs.Buffer, lenStr...)
 	bs.Buffer = append(bs.Buffer, "\r\n"...)
+
+	if length == -1 {
+		// 'nil' string
+		return bs, nil
+	}
 
 	// Also read the newline
 	strSlice := make([]byte, length + 2)
@@ -315,29 +322,14 @@ func ReadRArray(reader *bufio.Reader) (data *RArray, err error) {
 			continue
 		}
 
-		respBulkStr, isBulkString := part.(RBulkString)
+		respBulkStr, isBulkString := part.(*RBulkString)
 		if isBulkString {
-			ra.FirstValue = respBulkStr.Value
-			ra.SecondValue= respBulkStr.Value
-		}
-		continue
-
-		// TODO: Type check these parts for string types
-
-		// Determine start/end points of the part in the buffer. ra.Buffer should contain everything read so far...
-		partLen := len(part.GetBuffer())
-		partEndPos := len(ra.Buffer)
-		partStartPos := partEndPos - partLen
-//		fmt.Printf("Startpos %d endpos %d len %d part %q buffer %q\r\n", partStartPos, partEndPos, len(ra.Buffer), part.GetBuffer(), ra.Buffer)
-
-		defer func(startPos, endPos, i int) {
-			part := ra.Buffer[startPos:endPos]
 			if i == 0 {
-				ra.FirstValue = part
+				ra.FirstValue = respBulkStr.Value
 			} else if i == 1 {
-				ra.SecondValue = part
+				ra.SecondValue = respBulkStr.Value
 			}
-		}(partStartPos, partEndPos, i)
+		}
 	}
 
 	return ra, nil

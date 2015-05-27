@@ -50,8 +50,8 @@ func TestParseInt(test *testing.T) {
 	tester.verifyParseIntError([]byte("01b"))
 	tester.verifyParseIntError([]byte("0b1"))
 	tester.verifyParseIntError([]byte("b1"))
-	tester.verifyParseIntError([]byte("-1"))
 
+	tester.verifyParseIntResponse([]byte("-1"), -1)
 	tester.verifyParseIntResponse([]byte("12345"), 12345)
 	tester.verifyParseIntResponse([]byte("01"), 1)
 	tester.verifyParseIntResponse([]byte("10"), 10)
