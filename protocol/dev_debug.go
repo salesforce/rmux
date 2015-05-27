@@ -24,7 +24,7 @@ const (
 //If built with the 'dev' tag, routes through Printf.  If not, does nothing.
 //This is exposed publicly so that other packages that use this can optionally use the same build flag
 func Debug(format string, a ...interface{}) {
-	fmt.Printf(format + "\r\n", a...)
+	fmt.Printf(format+"\r\n", a...)
 }
 
 func DebugPanic(recover interface{}) {

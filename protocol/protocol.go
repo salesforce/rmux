@@ -400,15 +400,9 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponse(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, flush bool) error {
+func CopyServerResponse(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numCommands int) error {
 	for remoteBuffer.Buffered() > 0 {
 		if _, err := remoteBuffer.WriteTo(localBuffer); err != nil {
-			return err
-		}
-	}
-
-	if flush {
-		if err := localBuffer.Flush(); err != nil {
 			return err
 		}
 	}

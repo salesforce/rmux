@@ -17,9 +17,9 @@ import (
 	"errors"
 	"github.com/forcedotcom/rmux/connection"
 	"github.com/forcedotcom/rmux/protocol"
+	"io"
 	"net"
 	"time"
-	"io"
 )
 
 //Represents a redis client that is connected to our rmux server
@@ -30,33 +30,38 @@ type Client struct {
 	Multiplexing bool
 	//The connection wrapper for our net connection
 	ConnectionReadWriter io.ReadWriter
-	Connection net.Conn
+	Connection           net.Conn
 	//The Database that our client thinks we're connected to
 	DatabaseId int
 	//Whether or not this client connection is active or not
 	//Upon QUIT command, this gets toggled off
-	Active bool
-	ReadChannel chan []protocol.Command
+	Active       bool
+	ReadChannel  chan []protocol.Command
 	ErrorChannel chan error
+	HashRing     *connection.HashRing
+	queued       []protocol.Command
 }
 
 var (
 	ERR_NOTHING_TO_READ = errors.New("Nothing to read")
 	ERR_QUIT            = errors.New("Client asked to quit")
+	ERR_CONNECTION_DOWN = errors.New(string(CONNECTION_DOWN_RESPONSE))
 )
 
 var client_refuse_pile = make([]byte, 4096)
 
 //Initializes a new client, for the given established net connection, with the specified read/write timeouts
-func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isMuliplexing bool) (newClient *Client) {
+func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isMuliplexing bool, hashRing *connection.HashRing) (newClient *Client) {
 	newClient = &Client{}
 	newClient.Connection = connection
 	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection))
 	newClient.ConnectionReadWriter = newClient.ReadWriter
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
-	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane, these things don't grow automatically... or configurable
+	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane or configurable, these things don't grow automatically
 	newClient.ErrorChannel = make(chan error)
+	newClient.queued = make([]protocol.Command, 0, 4)
+	newClient.HashRing = hashRing
 	return
 }
 
@@ -88,32 +93,6 @@ func (this *Client) ParseCommand(command protocol.Command) ([]byte, error) {
 	return nil, nil
 }
 
-//Handles sending a single client request out across connectionPool, and copying the response back into our local buffer
-func (this *Client) HandleRequest(activeConnection *connection.Connection, command protocol.Command, flush bool) (err error) {
-	//If we aren't on the right DB, flip
-	if this.DatabaseId != activeConnection.DatabaseId {
-		err = activeConnection.SelectDatabase(this.DatabaseId)
-		if err != nil {
-			protocol.Debug("Error received while attempting to select database across remote connection: %s", err)
-			return
-		}
-	}
-
-	err = protocol.WriteCommand(command, activeConnection.Writer, flush)
-	if err != nil {
-		protocol.Debug("Error received when attempting to copy client request accross to remote server: %s", err)
-		// TODO: Should return an error code to the client?
-	}
-
-	err = protocol.CopyServerResponse(activeConnection.Reader, this.Writer, flush)
-	if err != nil {
-		protocol.Debug("Error received when attempting to copy remote connection response back to local client: %s", err)
-		return
-	}
-
-	return
-}
-
 // Reads commands on the input buffer. If something goes wrong reading, will return all successfully read until the error.
 // Discards the rest on the input buffer in the case of an error condition.
 // TODO Testing
@@ -139,7 +118,7 @@ func (this *Client) ReadBufferedCommands() (buffered []protocol.Command, err err
 			} else {
 				// Discard the rest on the read buffer.
 				protocol.Debug("Error reading buffered command: %s", err.Error())
-				this.DiscardReaderBuffered()
+				this.DiscardReaderBytes()
 				return nil, err
 			}
 		}
@@ -173,7 +152,7 @@ func (this *Client) ReadBufferedCommand() (command protocol.Command, err error) 
 	return command, nil
 }
 
-func (this *Client) DiscardReaderBuffered() {
+func (this *Client) DiscardReaderBytes() {
 	// At the time of this writing Reader.Discard only exists in golang unstable.
 	for this.HasAvailable() {
 		this.Reader.Read(client_refuse_pile)
@@ -186,24 +165,40 @@ func (this *Client) FlushLine(line []byte) (err error) {
 }
 
 // Performs the query against the redis server and responds to the connected client with the response from redis.
-func (this *Client) FlushRedisAndRespond(redisConn *connection.Connection) error {
+func (this *Client) FlushRedisAndRespond() error {
+	if !this.HasQueued() {
+		return nil
+	}
+
+	var connectionPool *connection.ConnectionPool
+	if !this.Multiplexing {
+		connectionPool = this.HashRing.DefaultConnectionPool
+	} else {
+		// TODO - kind of complicated, can only do one command at a time
+	}
+
+	redisConn := connectionPool.GetConnection()
+	defer connectionPool.RecycleRemoteConnection(redisConn)
+
 	if redisConn == nil {
+		protocol.Debug("Failed to retrieve an active connection from the provided connection pool")
+		this.ErrorChannel <- ERR_CONNECTION_DOWN
 		return nil
 	}
 
-	if redisConn.Writer.Buffered() == 0 {
-		return nil
+	numCommands := len(this.queued)
+	protocol.Debug("Writing %d commands to the redis server", numCommands)
+	for _, command := range this.queued {
+		redisConn.Write(command.GetBuffer())
 	}
+	this.resetQueued()
+	redisConn.Writer.Flush()
 
-	// Flush any pending requests
-	if err := redisConn.Writer.Flush(); err != nil {
+	if err := protocol.CopyServerResponse(redisConn.Reader, this.Writer, numCommands); err != nil {
 		return err
 	}
 
-	// Read the response TODO ensure as many commands as sent were responded to
-	if _, err := this.Writer.ReadFrom(redisConn.Reader); err != nil {
-		return err
-	}
+	this.Writer.Flush()
 
 	return nil
 }
@@ -214,14 +209,27 @@ func (this *Client) HasBufferedOutput() bool {
 
 // Read loop for this client - moves commands and channels to the worker loop
 func (this *Client) ReadLoop() {
-	// TODO: This needs to stop when the client dies is deactivated.
+	// TODO: This needs to stop when the client dies or is deactivated.
 	for this.Active {
 		// Read any commands
 		commands, err := this.ReadBufferedCommands()
 		if err != nil {
-			this.ErrorChannel<- err
+			this.ErrorChannel <- err
 		} else if len(commands) > 0 {
-			this.ReadChannel<- commands
+			this.ReadChannel <- commands
 		}
 	}
+}
+
+func (this *Client) resetQueued() {
+	// We make a new one instead of using this.queued=this.queued[:0] so that the command arrays are eligible for GC
+	this.queued = make([]protocol.Command, 0, 4)
+}
+
+func (this *Client) HasQueued() bool {
+	return len(this.queued) > 0
+}
+
+func (this *Client) Queue(command protocol.Command) {
+	this.queued = append(this.queued, command)
 }

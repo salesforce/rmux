@@ -83,7 +83,7 @@ func (this *RedisMultiplexer) initializeCleanup() {
 	this.Listener.Close()
 	//Give ourselves a bit to clean up
 	time.Sleep(time.Millisecond * 150)
-	os.Exit(1)
+	os.Exit(0)
 }
 
 //Initializes a new redis multiplexer, listening on the given protocol/endpoint, with a set connectionPool size
@@ -186,7 +186,7 @@ func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 	atomic.AddInt32(&this.connectionCount, 1)
 	//Add the connection to our internal list
 	myClient := NewClient(localConnection, this.ClientReadTimeout, this.ClientWriteTimeout,
-		this.multiplexing)
+		this.multiplexing, this.HashRing)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -224,14 +224,15 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 
 	for this.active && client.Active {
 		select {
+		case error := <-client.ErrorChannel:
+			this.HandleError(client, error)
 		case commands := <-client.ReadChannel:
 			protocol.Debug("Got %d command(s)!", len(commands))
 			this.HandleCommands(client, commands)
-		case error := <-client.ErrorChannel:
-			protocol.Debug("Got error: %s", error)
-			this.HandleError(client, error)
 		default:
-		// TODO: If not multiplexing flush to default connection?
+			if client.HasQueued() {
+				client.FlushRedisAndRespond()
+			}
 		}
 	}
 
@@ -239,23 +240,13 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 }
 
 func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol.Command) {
-	var connection *connection.Connection
-	connectionPool := this.HashRing.DefaultConnectionPool // TODO: This doesn't have a default connection pool assigned
-
-	defer func() {
-		if connection != nil {
-			connectionPool.RecycleRemoteConnection(connection)
-		}
-	}()
-
-CommandLoop:
 	for _, command := range commands {
 		protocol.Debug("Got command %s %d", command.GetCommand(), command.GetArgCount())
 		immediateResponse, err := client.ParseCommand(command)
 
-		if immediateResponse != nil || err != nil && connection != nil && connection.Writer.Buffered() > 0 {
+		if (immediateResponse != nil || err != nil) && client.HasQueued() {
 			// Need to respond to the client. Flush anything pending.
-			if err := client.FlushRedisAndRespond(connection); err != nil {
+			if err := client.FlushRedisAndRespond(); err != nil {
 				protocol.Debug("Error from FlushRedisAndRespond: %s", err)
 			}
 		}
@@ -269,56 +260,31 @@ CommandLoop:
 		} else if err != nil {
 			protocol.Debug("Got error %s", err.Error())
 			if err == ERR_QUIT {
-				// Respond with OK, deactivate ourselves
-				client.FlushLine(protocol.OK_RESPONSE)
-				client.Active = false
+				client.ErrorChannel <- err
+				return
 			} else if recErr, ok := err.(*protocol.RecoverableError); ok {
 				// Flush stuff back to the client, get rid of the rest on the read buffer.
 				client.FlushError(recErr)
-				client.DiscardReaderBuffered()
+				client.DiscardReaderBytes()
 			} else {
 				panic("Not sure how to handle this error: " + err.Error())
 			}
 
-			continue CommandLoop
+			continue
 		}
 
 		// Otherwise, the command is ready to buffer to the connection.
-		// TODO: Maybe we should use a write buffer in front of it before grabbing the connection?
-		if connection == nil {
-			connection = connectionPool.GetConnection()
-
-			//If we don't have a connection, something went horribly wrong
-			if connection == nil {
-				protocol.Debug("Failed to retrieve an active connection from the provided connection pool")
-				protocol.WriteError(CONNECTION_DOWN_RESPONSE, client.Writer, true)
-				return
-			}
-		}
-
-		// Write the command out to server
-		// TODO: See what happens when the output buffer is filled... can it be filled?
-		err = protocol.WriteCommand(command, connection.Writer, false)
-		if err != nil {
-			// TODO: Error handling - flush the buffer on both sides
-			protocol.Debug("Error writing to redis: %s", err.Error())
-			continue
-		}
+		client.Queue(command)
 	}
 
 	protocol.Debug("Is there buffered stuff?")
-	if connection != nil && connection.Writer.Buffered() > 0 {
-		protocol.Debug("Buffered stuff, gonna write")
-		client.FlushRedisAndRespond(connection) // TODO: error handling
-		protocol.Debug("Shoulda responded by now")
+	if client.HasQueued() {
+		protocol.Debug("Yes, attempting to respond")
+		client.FlushRedisAndRespond()
 	}
 
 	if client.Writer.Buffered() > 0 {
 		client.Writer.Flush()
-	}
-
-	if connection != nil {
-		connectionPool.RecycleRemoteConnection(connection)
 	}
 }
 
@@ -327,7 +293,14 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		return
 	}
 
-	if recErr, ok := err.(*protocol.RecoverableError); ok {
+	protocol.Debug("Handling an error: %s", err)
+
+	if err == ERR_QUIT {
+		// Respond with OK, deactivate ourselves
+		client.FlushLine(protocol.OK_RESPONSE)
+		client.Active = false
+		return
+	} else if recErr, ok := err.(*protocol.RecoverableError); ok {
 		// Since we can recover, flush an error to the client
 		client.FlushError(recErr)
 		return
@@ -343,4 +316,3 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		panic("New Client Read Error: " + err.Error())
 	}
 }
-
