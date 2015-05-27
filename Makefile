@@ -9,6 +9,9 @@ test:
 test-dev:
 	go test -tags 'dev' ./...
 
+fmt:
+	go fmt ./...
+
 mkbuild:
 	mkdir -p ./build
 
@@ -26,4 +29,4 @@ build-all-dev: mkbuild build-dev
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'dev' -o build/rmux-linux-amd64-dev ./main
 	GOOS=linux GOARCH=386 CGO_ENABLED=0 go build -tags 'dev' -o build/rmux-linux-386-dev ./main
 
-.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev
+.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt

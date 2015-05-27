@@ -350,10 +350,12 @@ func ReadCommand(source *bufio.Reader) (command Command, err error) {
 		command, err = ReadSimpleCommand(source)
 	case peek == '*':
 		command, err = ReadMultibulkCommand(source)
-	case (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z'):
-		command, err = ReadInlineCommand(source)
 	case peek == '$':
 		command, err = ReadStringCommand(source)
+		//	case peek == ':':
+		//		command, err = ReadIntegerCommand(source)
+	case (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z'):
+		command, err = ReadInlineCommand(source)
 	default:
 		command, err = nil, ERROR_INVALID_COMMAND_FORMAT
 	}

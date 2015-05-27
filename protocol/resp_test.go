@@ -1,17 +1,17 @@
 package protocol
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
 func TestReadRSimpleString(t *testing.T) {
 	testData := []struct {
 		input string
 		value []byte
-	} {
-		{"+Test\r\n",[]byte("Test")},
-		{"+This is a simple string test\r\n",[]byte("This is a simple string test")},
+	}{
+		{"+Test\r\n", []byte("Test")},
+		{"+This is a simple string test\r\n", []byte("This is a simple string test")},
 	}
 
 	for _, expected := range testData {
@@ -35,7 +35,7 @@ func TestReadRBulkString(t *testing.T) {
 	testData := []struct {
 		input string
 		value string
-	} {
+	}{
 		{"$4\r\nPING\r\n", "PING"},
 		{"$12\r\nBGREWRITEAOF\r\n", "BGREWRITEAOF"},
 		{"$7\r\ncommand\r\n", "command"},
@@ -66,10 +66,10 @@ func TestReadRBulkString(t *testing.T) {
 
 func TestReadInlineString(t *testing.T) {
 	testData := []struct {
-		input string
-		command string
+		input    string
+		command  string
 		firstArg string
-	} {
+	}{
 		{"PING\r\n", "PING", ""},
 		{"BGREWRITEAOF\r\n", "BGREWRITEAOF", ""},
 		{"command\r\n", "command", ""},
@@ -106,7 +106,7 @@ func TestReadRError(t *testing.T) {
 	testData := []struct {
 		input string
 		value string
-	} {
+	}{
 		{"-SOME ERROR\r\n", "SOME ERROR"},
 	}
 
@@ -132,7 +132,7 @@ func TestReadRInteger(t *testing.T) {
 	testData := []struct {
 		input string
 		value int
-	} {
+	}{
 		{":1\r\n", 1},
 		{":9001\r\n", 9001},
 		{":9223372036854775807\r\n", 1<<63 - 1},
@@ -159,10 +159,10 @@ func TestReadRInteger(t *testing.T) {
 func TestReadRArray(t *testing.T) {
 	testData := []struct {
 		input string
-		arg1 string
-		arg2 string
+		arg1  string
+		arg2  string
 		count int
-	} {
+	}{
 
 		{"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n", "keys", "*", 1},
 		{"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n", "KEYS", "*", 1},

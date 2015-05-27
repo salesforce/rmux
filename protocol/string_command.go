@@ -6,7 +6,7 @@ import (
 )
 
 type StringCommand struct {
-	Buffer  []byte
+	Buffer []byte
 	// Every string command *should* fit within 20 bytes. The slice above will resize properly in append() if not though.
 	buffer [20]byte
 }
@@ -42,7 +42,7 @@ func ReadStringCommand(reader *bufio.Reader) (*StringCommand, error) {
 	}
 
 	// Also read the newline
-	strSlice := make([]byte, len + 2)
+	strSlice := make([]byte, len+2)
 	_, err = reader.Read(strSlice)
 	if err != nil {
 		return nil, err

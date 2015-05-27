@@ -1,8 +1,9 @@
 package protocol
+
 import (
 	"bufio"
-	"fmt"
 	"bytes"
+	"fmt"
 )
 
 // resp.go: REdis Serialization Protocol
@@ -20,7 +21,7 @@ type respData struct {
 
 type respCommand struct {
 	respData
-	Command []byte
+	Command  []byte
 	FirstArg []byte
 	ArgCount int
 }
@@ -59,7 +60,7 @@ func ReadRSimpleString(reader *bufio.Reader) (*RSimpleString, error) {
 
 	ss.Buffer = append(ss.Buffer, read...)
 	ss.Buffer = append(ss.Buffer, "\r\n"...)
-	ss.Value = ss.Buffer[1:len(ss.Buffer) - 2]
+	ss.Value = ss.Buffer[1 : len(ss.Buffer)-2]
 
 	return ss, nil
 }
@@ -111,14 +112,14 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 	}
 
 	// Also read the newline
-	strSlice := make([]byte, length + 2)
+	strSlice := make([]byte, length+2)
 	_, err = reader.Read(strSlice)
 	if err != nil {
 		return nil, err
 	}
 
 	bs.Buffer = append(bs.Buffer, strSlice...)
-	bs.Value = bs.Buffer[len(bs.Buffer) - length - 2: len(bs.Buffer) - 2]
+	bs.Value = bs.Buffer[len(bs.Buffer)-length-2 : len(bs.Buffer)-2]
 
 	return bs, nil
 }
@@ -157,7 +158,7 @@ func ReadRError(reader *bufio.Reader) (*RError, error) {
 
 	re.Buffer = append(re.Buffer, read...)
 	re.Buffer = append(re.Buffer, "\r\n"...)
-	re.Value = re.Buffer[1:len(re.Buffer) - 2]
+	re.Value = re.Buffer[1 : len(re.Buffer)-2]
 
 	return re, nil
 }
@@ -197,7 +198,7 @@ func ReadRInteger(reader *bufio.Reader) (*RInteger, error) {
 	ri.Buffer = append(ri.Buffer, read...)
 	ri.Buffer = append(ri.Buffer, "\r\n"...)
 
-	value, err := ParseInt(ri.Buffer[1:len(ri.Buffer) - 2])
+	value, err := ParseInt(ri.Buffer[1 : len(ri.Buffer)-2])
 	if err != nil {
 		return nil, err
 	}
@@ -275,9 +276,9 @@ func (this RInlineString) GetBuffer() []byte {
 // =============== Array ==============
 type RArray struct {
 	respData
-	FirstValue []byte
+	FirstValue  []byte
 	SecondValue []byte
-	Count int
+	Count       int
 }
 
 func NewRArray() *RArray {
