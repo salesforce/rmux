@@ -98,10 +98,10 @@ func TestGetCommand(test *testing.T) {
 	tester.verifyGetCommandError("$4\r\ninfo\r")
 	tester.verifyGetCommandError("$a\r\ninfo")
 
-	tester.verifyGetCommandError("$3\r\nget\r\n$1a")
-	tester.verifyGetCommandError("$3\r\nget\r\n$a")
-	tester.verifyGetCommandError("$3\r\nget\r\n$1\r\naa")
-	tester.verifyGetCommandError("$4\r\niNfo\r\n")
+	tester.verifyGetCommandResponse("$3\r\nget\r\n$1a", "get", "")
+	tester.verifyGetCommandResponse("$3\r\nget\r\n$a", "get", "")
+	tester.verifyGetCommandResponse("$3\r\nget\r\n$1\r\naa", "get", "")
+	tester.verifyGetCommandResponse("$4\r\niNfo\r\n", "info", "")
 
 	tester.verifyGetCommandResponse("info", "info", "")
 	tester.verifyGetCommandResponse("*1\r\n$4\r\niNfo\r\n", "info", "")

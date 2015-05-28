@@ -53,9 +53,11 @@ func ReadRSimpleString(reader *bufio.Reader) (*RSimpleString, error) {
 	}
 	ss.Buffer = append(ss.Buffer, firstByte)
 
-	read, _, err := reader.ReadLine()
+	read, isPrefix, err := reader.ReadLine()
 	if err != nil {
 		return nil, err
+	} else if isPrefix {
+		return nil, ERROR_COMMAND_PARSE
 	}
 
 	ss.Buffer = append(ss.Buffer, read...)
@@ -67,6 +69,31 @@ func ReadRSimpleString(reader *bufio.Reader) (*RSimpleString, error) {
 
 func (this RSimpleString) GetBuffer() []byte {
 	return this.Buffer
+}
+
+func (this *RSimpleString) GetFirstArg() []byte {
+	split := bytes.Split(this.Value, []byte(" "))
+
+	if len(split) == 0 {
+		return nil
+	} else {
+		return split[0]
+	}
+}
+
+func (this *RSimpleString) GetSecondArg() []byte {
+	split := bytes.Split(this.Value, []byte(" "))
+
+	if len(split) < 2 {
+		return nil
+	} else {
+		return split[1]
+	}
+}
+
+func (this *RSimpleString) CountArgs() int {
+	split := bytes.Split(this.Value, []byte(" "))
+	return len(split)
 }
 
 // =============== Bulk String ==============
@@ -113,9 +140,13 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 
 	// Also read the newline
 	strSlice := make([]byte, length+2)
-	_, err = reader.Read(strSlice)
+	nRead, err := reader.Read(strSlice)
 	if err != nil {
 		return nil, err
+	} else if nRead != length + 2 {
+		return nil, ERROR_COMMAND_PARSE // TODO: Maybe not enough read error or something
+	} else if strSlice[length] != '\r' || strSlice[length + 1] != '\n' {
+		return nil, ERROR_COMMAND_PARSE
 	}
 
 	bs.Buffer = append(bs.Buffer, strSlice...)
@@ -124,8 +155,23 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 	return bs, nil
 }
 
-func (this RBulkString) GetBuffer() []byte {
+func (this *RBulkString) GetBuffer() []byte {
 	return this.Buffer
+}
+
+func (this *RBulkString) GetArg(i int) []byte {
+	split := bytes.Split(this.Value, []byte(" "))
+
+	if len(split) > i {
+		return split[i]
+	} else {
+		return nil
+	}
+}
+
+func (this *RBulkString) GetArgCount() int {
+	split := bytes.Split(this.Value, []byte(" "))
+	return len(split)
 }
 
 // =============== Errors ==============
@@ -151,9 +197,11 @@ func ReadRError(reader *bufio.Reader) (*RError, error) {
 	}
 	re.Buffer = append(re.Buffer, firstByte)
 
-	read, _, err := reader.ReadLine()
+	read, isPrefix, err := reader.ReadLine()
 	if err != nil {
 		return nil, err
+	} else if isPrefix {
+		return nil, ERROR_COMMAND_PARSE
 	}
 
 	re.Buffer = append(re.Buffer, read...)
@@ -190,9 +238,11 @@ func ReadRInteger(reader *bufio.Reader) (*RInteger, error) {
 	}
 	ri.Buffer = append(ri.Buffer, firstByte)
 
-	read, _, err := reader.ReadLine()
+	read, isPrefix, err := reader.ReadLine()
 	if err != nil {
 		return nil, err
+	} else if isPrefix {
+		return nil, ERROR_COMMAND_PARSE
 	}
 
 	ri.Buffer = append(ri.Buffer, read...)
@@ -299,9 +349,11 @@ func ReadRArray(reader *bufio.Reader) (data *RArray, err error) {
 	ra.Buffer = append(ra.Buffer, firstByte)
 
 	// Read the number of parts
-	partCountStr, _, err := reader.ReadLine()
+	partCountStr, isPrefix, err := reader.ReadLine()
 	if err != nil {
 		return nil, err
+	} else if isPrefix {
+		return nil, ERROR_COMMAND_PARSE
 	}
 	ra.Buffer = append(ra.Buffer, partCountStr...)
 	ra.Buffer = append(ra.Buffer, "\r\n"...)
@@ -309,7 +361,7 @@ func ReadRArray(reader *bufio.Reader) (data *RArray, err error) {
 	if err != nil {
 		return nil, err
 	}
-	ra.Count = partCount - 1
+	ra.Count = partCount
 
 	for i := 0; i < partCount; i++ {
 		part, err := ReadResp(reader)
@@ -348,7 +400,7 @@ func ReadResp(reader *bufio.Reader) (data RespData, err error) {
 	}
 
 	peek := peeked[0]
-	Debug("Peeked: %c", peek)
+
 	switch {
 	case peek == '+':
 		data, err = ReadRSimpleString(reader)

@@ -164,24 +164,24 @@ func TestReadRArray(t *testing.T) {
 		count int
 	}{
 
-		{"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n", "keys", "*", 1},
-		{"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n", "KEYS", "*", 1},
-		{"*1\r\n$4\r\nquit\r\n", "quit", "", 0},
-		{"*1\r\n$4\r\nQUIT\r\n", "QUIT", "", 0},
+		{"*2\r\n$4\r\nkeys\r\n$1\r\n*\r\n", "keys", "*", 2},
+		{"*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n", "KEYS", "*", 2},
+		{"*1\r\n$4\r\nquit\r\n", "quit", "", 1},
+		{"*1\r\n$4\r\nQUIT\r\n", "QUIT", "", 1},
 		{
 			"*2\r\n$40\r\n1234567890123456789012345678901234567890\r\n$30\r\n123456789012345678901234567890\r\n",
 			"1234567890123456789012345678901234567890",
 			"123456789012345678901234567890",
-			1,
+			2,
 		},
 		{
 			"*5\r\n$3\r\nDEL\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n",
 			"DEL",
 			"key1",
-			4,
+			5,
 		},
 		// Handle Null Bulk Strings (http://redis.io/topics/protocol)
-		{"*2\r\n$3\r\ndel\r\n$-1\r\n", "del", string(NIL_STRING), 1},
+		{"*2\r\n$3\r\ndel\r\n$-1\r\n", "del", string(NIL_STRING), 2},
 	}
 
 	for _, expected := range testData {

@@ -298,14 +298,14 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 //Parses a string into an int.
 //Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
 //Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
-func ParseInt(response []byte) (length int, err error) {
+func ParseInt(response []byte) (value int, err error) {
 	if len(response) == 0 {
 		Debug("ParseInt: Zero-length int")
 		err = ERROR_INVALID_INT
 		return
 	}
 
-	length = 0
+	value = 0
 	isNegative := false
 	//It's worth re-inventing the wheel, if you have a good understanding of your particular wheel's usage
 	for i, b := range response {
@@ -318,16 +318,16 @@ func ParseInt(response []byte) (length int, err error) {
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
 		if b > 9 {
-			Debug("ParseInt: Invalid int character: %q", b)
+			Debug("ParseInt: Invalid int character: %q when parsing %q", b + '0', response)
 			err = ERROR_INVALID_INT
 			return
 		}
-		length *= 10
-		length += int(b)
+		value *= 10
+		value += int(b)
 	}
 
 	if isNegative {
-		length *= -1
+		value *= -1
 	}
 
 	return
@@ -335,30 +335,12 @@ func ParseInt(response []byte) (length int, err error) {
 
 //Inspects the incoming payload and returns the command.
 func ReadCommand(source *bufio.Reader) (command Command, err error) {
-	if source.Buffered() > 0 {
-		Debug("Buffered %d", source.Buffered())
-	}
-	peeked, err := source.Peek(1)
+	resp, err := ReadResp(source)
 	if err != nil {
 		return nil, err
 	}
 
-	peek := peeked[0]
-	Debug("Peeked: %c", peek)
-	switch {
-	case peek == '+':
-		command, err = ReadSimpleCommand(source)
-	case peek == '*':
-		command, err = ReadMultibulkCommand(source)
-	case peek == '$':
-		command, err = ReadStringCommand(source)
-		//	case peek == ':':
-		//		command, err = ReadIntegerCommand(source)
-	case (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z'):
-		command, err = ReadInlineCommand(source)
-	default:
-		command, err = nil, ERROR_INVALID_COMMAND_FORMAT
-	}
+	command, err = WrapRespCommand(resp)
 
 	return command, err
 }

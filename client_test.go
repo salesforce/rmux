@@ -63,11 +63,11 @@ func TestReadCommand(t *testing.T) {
 		}
 
 		if bytes.Compare(command.GetCommand(), []byte(data.command)) != 0 {
-			t.Errorf("Should have parsed command %s, got %q", data.command, command.GetCommand())
+			t.Errorf("Should have parsed command %q, got %q", data.command, command.GetCommand())
 		}
 
 		if command.GetArgCount() != data.argCount {
-			t.Errorf("Should have parsed %d arguments, got %d", data.argCount, command.GetArgCount())
+			t.Errorf("%q should have parsed into %d argument(s), got %d", data.input, data.argCount, command.GetArgCount())
 		}
 
 		if bytes.Compare(command.GetFirstArg(), []byte(data.arg1)) != 0 {
