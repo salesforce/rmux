@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"time"
+	"fmt"
 )
 
 //Represents a redis client that is connected to our rmux server
@@ -172,6 +173,8 @@ func (this *Client) FlushRedisAndRespond() error {
 		return nil
 	}
 
+	start := time.Now()
+
 	var connectionPool *connection.ConnectionPool
 	if !this.Multiplexing {
 		connectionPool = this.HashRing.DefaultConnectionPool
@@ -179,7 +182,9 @@ func (this *Client) FlushRedisAndRespond() error {
 		// TODO - kind of complicated, can only do one command at a time
 	}
 
+	connStart := time.Now()
 	redisConn := connectionPool.GetConnection()
+	connEnd := time.Since(connStart)
 	defer connectionPool.RecycleRemoteConnection(redisConn)
 
 	if redisConn == nil {
@@ -194,6 +199,7 @@ func (this *Client) FlushRedisAndRespond() error {
 		}
 	}
 
+	writeStart := time.Now()
 	numCommands := len(this.queued)
 	protocol.Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
@@ -201,12 +207,17 @@ func (this *Client) FlushRedisAndRespond() error {
 	}
 	this.resetQueued()
 	redisConn.Writer.Flush()
+	writeEnd := time.Since(writeStart)
 
-	if err := protocol.CopyServerResponse(redisConn.Reader, this.Writer, numCommands); err != nil {
+	copyStart := time.Now()
+	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
 		return err
 	}
+	copyEnd := time.Since(copyStart)
 
 	this.Writer.Flush()
+
+	fmt.Printf("all %s getConn %s write %s copyResponse %s\r\n", time.Since(start), connEnd, writeEnd, copyEnd)
 
 	return nil
 }

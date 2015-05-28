@@ -241,7 +241,6 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 
 func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol.Command) {
 	for _, command := range commands {
-		protocol.Debug("Got command %s %d", command.GetCommand(), command.GetArgCount())
 		immediateResponse, err := client.ParseCommand(command)
 
 		if (immediateResponse != nil || err != nil) && client.HasQueued() {
@@ -258,7 +257,6 @@ func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol
 			}
 			continue
 		} else if err != nil {
-			protocol.Debug("Got error %s", err.Error())
 			if err == ERR_QUIT {
 				client.ErrorChannel <- err
 				return
@@ -277,9 +275,7 @@ func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol
 		client.Queue(command)
 	}
 
-	protocol.Debug("Is there buffered stuff?")
 	if client.HasQueued() {
-		protocol.Debug("Yes, attempting to respond")
 		client.FlushRedisAndRespond()
 	}
 

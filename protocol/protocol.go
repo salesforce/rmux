@@ -13,6 +13,9 @@ package protocol
 
 import (
 	"bufio"
+	"io"
+	"time"
+	"bytes"
 )
 
 const (
@@ -397,18 +400,166 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponse(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numCommands int) error {
-	for i := 0; i < numCommands; i++ {
-		// TODO: Error handling
-		resp, err := ReadResp(remoteBuffer)
+func CopyServerResponses(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numResponses int) error {
+	for i := 0; i < numResponses; i++ {
+		err := CopyServerResponse(remoteBuffer, localBuffer)
 		if err != nil {
 			Debug("Got an error oh god panic %q", err.Error())
 			return err
 		}
-		localBuffer.Write(resp.GetBuffer())
 	}
 
 	localBuffer.Flush()
+
+	return nil
+}
+
+//Copies a single bulk message from source to destination, beginning with firstLine
+//If a protocol or a buffer error is encountered, it is bubbled up
+func CopyBulkMessage(firstLine []byte, source *bufio.Reader, destination *bufio.Writer) (err error) {
+	if len(firstLine) < 2 || firstLine[0] != '$' {
+		err = ERROR_BAD_BULK_FORMAT
+		Debug("copyBulkMessage: Invalid bulk response first line")
+		return
+	}
+
+	if bytes.Equal(firstLine, ERR_RESPONSE) {
+		//If we have a $-1, that's nil.  write and flush
+		err = WriteLine(ERR_RESPONSE, destination, false)
+		if err != nil {
+			Debug("copyBulkMessage: Error received from writeLine: %s", err)
+		}
+		return
+	}
+
+	//add two for the newline
+	n, err := ParseInt(firstLine[1:])
+	if err != nil {
+		Debug("copyBulkMessage: Error received from ParseInt: %s", err)
+		return
+	}
+
+	err = WriteLine(firstLine, destination, false)
+	if err != nil {
+		Debug("copyBulkMessage: Error received from writeLine: %s", err)
+		return
+	}
+
+	written, err := io.CopyN(destination, source, int64(n))
+	if err != nil {
+		Debug("copyBulkMessage: Error received from io.CopyN: %s", err)
+		return
+	}
+
+	if written != int64(n) {
+		Debug("copyBulkMessage: Ran out of bytes to copy: %s", err)
+		return
+	}
+
+	char, err := source.ReadByte()
+	if err != nil {
+		Debug("copyBulkMessage: Error received from readByte: %s", err)
+		return
+	}
+
+	if char != '\r' {
+		Debug("copyBulkMessage: Missing carriage-return character", err)
+		err = ERROR_BAD_BULK_FORMAT
+		return
+	}
+
+	char, err = source.ReadByte()
+	if err != nil {
+		Debug("copyBulkMessage: Error received from readByte: %s", err)
+		return
+	}
+	if char != '\n' {
+		Debug("copyBulkMessage: Missing newline character", err)
+		err = ERROR_BAD_BULK_FORMAT
+		return
+	}
+
+	_, err = destination.Write(REDIS_NEWLINE)
+	if err != nil {
+		Debug("copyBulkMessage: Error received from write: %s", err)
+		return
+	}
+
+	return
+}
+
+//Copies a multi bulk message from source to destination, beginning with firstLine
+//If a protocol or a buffer error is encountered, it is bubbled up
+func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *bufio.Writer) (err error) {
+	//validate format
+	if len(firstLine) < 2 || firstLine[0] != '*' {
+		err = ERROR_BAD_BULK_FORMAT
+		Debug("IgnoreMultiBulkMessage: Invalid multibulk response first line")
+		return
+	}
+
+	n, err := ParseInt(firstLine[1:])
+	if err != nil {
+		Debug("CopyMultiBulkMessage: Error received from ParseInt: %s", err)
+		return
+	}
+
+	err = WriteLine(firstLine, destination, false)
+	if err != nil {
+		Debug("CopyMultiBulkMessage: Error received from writeLine: %s", err)
+		return
+	}
+
+	for i := 0; i < n; i++ {
+		firstLine, _, err = source.ReadLine()
+		if err != nil {
+			return
+		}
+		err = CopyBulkMessage(firstLine, source, destination)
+		if err != nil {
+			return
+		}
+	}
+	err = destination.Flush()
+	if err != nil {
+		Debug("CopyMultiBulkMessage: Error received from Flush: %s", err)
+		return
+	}
+	return
+}
+
+func CopyServerResponse(reader *bufio.Reader, writer *bufio.Writer) error {
+	startTime := time.Now()
+	defer func() {
+		Debug("Time to copy response: %s", time.Since(startTime))
+	}()
+
+	// Read the first line
+	line, isPrefix, err := reader.ReadLine()
+	if err != nil {
+		return err
+	} else if isPrefix || len(line) < 2 {
+		return ERROR_BAD_BULK_FORMAT
+	}
+
+	if line[0] == '$' {
+		// Bulk string format
+		err = CopyBulkMessage(line, reader, writer)
+		if err != nil {
+			return err
+		}
+	} else if line[0] == '*' && line[1] != '-' {
+		err = CopyMultiBulkMessage(line, reader, writer)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Integers, errors, simple strings, inline strings
+		err = WriteLine(line, writer, false)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
