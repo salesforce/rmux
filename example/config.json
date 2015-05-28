@@ -1,0 +1,10 @@
+[
+	{
+		"socket": "/usr/local/var/run/rmux-1-master.sock",
+		"tcpConnections": [ "localhost:6379" ]
+	},
+	{
+		"socket": "/usr/local/var/run/rmux-1-slave.sock",
+		"tcpConnections": [ "localhost:6379" ]
+	}
+]

@@ -29,4 +29,13 @@ build-all-dev: mkbuild build-dev
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags 'dev' -o build/rmux-linux-amd64-dev ./main
 	GOOS=linux GOARCH=386 CGO_ENABLED=0 go build -tags 'dev' -o build/rmux-linux-386-dev ./main
 
-.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt
+run-example: build
+	./build/rmux -config=./example/config.json
+
+run-example-dev: build-dev
+	./build/rmux-dev -config=./example/config.json
+
+run-profile: build
+	./build/rmux -config=./example/config.json -cpuProfile=./build/profile.prof
+
+.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile

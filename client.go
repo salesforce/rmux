@@ -62,6 +62,7 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	newClient.ErrorChannel = make(chan error)
 	newClient.queued = make([]protocol.Command, 0, 4)
 	newClient.HashRing = hashRing
+	newClient.DatabaseId = 0
 	return
 }
 

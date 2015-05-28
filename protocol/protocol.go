@@ -400,12 +400,12 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 func CopyServerResponse(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numCommands int) error {
 	for i := 0; i < numCommands; i++ {
 		// TODO: Error handling
-		command, err := ReadCommand(remoteBuffer)
+		resp, err := ReadResp(remoteBuffer)
 		if err != nil {
 			Debug("Got an error oh god panic %q", err.Error())
 			return err
 		}
-		localBuffer.Write(command.GetBuffer())
+		localBuffer.Write(resp.GetBuffer())
 	}
 
 	localBuffer.Flush()
