@@ -1,51 +1,32 @@
 package protocol
 
 import (
-	"bufio"
 	"fmt"
 )
 
 type SimpleCommand struct {
-	Command []byte
 	Buffer  []byte
-	// Every simple command *should* fit within 20 bytes. The slice above will resize properly in append() if not though.
-	buffer [20]byte
+	Command []byte
 }
 
-func NewSimpleCommand() *SimpleCommand {
-	sc := &SimpleCommand{}
-	sc.Buffer = sc.buffer[0:0]
-	return sc
-}
+func ParseSimpleCommand(b []byte) (*SimpleCommand, error) {
+	c := &SimpleCommand{}
+	c.Buffer = make([]byte, len(b))
+	copy(c.Buffer, b)
 
-func ReadSimpleCommand(reader *bufio.Reader) (*SimpleCommand, error) {
-	sc := NewSimpleCommand()
-
-	firstByte, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	} else if firstByte != '+' {
-		return nil, fmt.Errorf("Expected '+', got '%c'", firstByte)
-	}
-	sc.Buffer = append(sc.Buffer, firstByte)
-
-	read, _, err := reader.ReadLine()
-	if err != nil {
-		return nil, err
+	if c.Buffer[0] != '+' {
+		return nil, fmt.Errorf("Expected '+', got '%c'", c.Buffer[0])
 	}
 
-	sc.Buffer = append(sc.Buffer, read...)
-	sc.Command = sc.Buffer[1:]
-	for i := 0; i < len(sc.Command); i++ {
+	c.Command = c.Buffer[1:len(c.Buffer)-2]
+	for i := 0; i < len(c.Command); i++ {
 		// lowercase it
-		if char := sc.Command[i]; char >= 'A' && char <= 'Z' {
-			sc.Command[i] = sc.Command[i] + 0x20
+		if char := c.Command[i]; char >= 'A' && char <= 'Z' {
+			c.Command[i] = c.Command[i] + 0x20
 		}
 	}
 
-	sc.Buffer = append(sc.Buffer, "\r\n"...)
-
-	return sc, nil
+	return c, nil
 }
 
 // Satisfy Command Interface
