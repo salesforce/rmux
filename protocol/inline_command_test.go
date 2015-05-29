@@ -110,7 +110,7 @@ func TestInlineCommand(test *testing.T) {
 	tester := commandTester{test}
 
 	for input, expected := range inlineTestData {
-		command, err := ReadInlineCommand(getReader(input))
+		command, err := ParseInlineCommand([]byte(input))
 
 		tester.checkCommandOutput(expected, command, err, input)
 	}

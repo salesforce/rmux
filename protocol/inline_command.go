@@ -1,14 +1,11 @@
 package protocol
 
 import (
-	"bufio"
 	"bytes"
 )
 
 type InlineCommand struct {
 	Buffer []byte
-	buffer [64]byte
-
 	Command []byte
 	// Usually denotes the key
 	FirstArg []byte
@@ -16,67 +13,47 @@ type InlineCommand struct {
 }
 
 func NewInlineCommand() *InlineCommand {
-	bs := &InlineCommand{}
-	bs.Buffer = bs.buffer[0:0]
-	bs.Command = nil
-	bs.FirstArg = nil
-	return bs
+	c := &InlineCommand{}
+	c.Buffer = nil
+	c.Command = nil
+	c.FirstArg = nil
+	return c
 }
 
-func ReadInlineCommand(r *bufio.Reader) (*InlineCommand, error) {
-	command := NewInlineCommand()
+func ParseInlineCommand(b []byte) (*InlineCommand, error) {
+	c := NewInlineCommand()
 
-	// TODO: Handle the isPrefix return value as an error condition... but how?
-	fullBuffer, _, err := r.ReadLine()
-	if err != nil {
-		return nil, err
-	}
+	// Copy the bytes, probably not going to have access to that dataspace later
+	c.Buffer = make([]byte, len(b))
+	copy(c.Buffer, b)
 
-	command.Buffer = append(command.Buffer, fullBuffer...)
-	command.Buffer = append(command.Buffer, "\r\n"...)
+	parts := bytes.Split(c.Buffer[:len(c.Buffer) - 2], []byte(" "))
 
-	// Defer lowercasing the resulting command name
-	defer func() {
-		for i := 0; i < len(command.Command); i++ {
-			if command.Command[i] >= 'A' && command.Command[i] <= 'Z' {
-				command.Command[i] = command.Command[i] + 0x20
-			}
-		}
-	}()
-
-	command.ArgCount = -1
-
-	bufSlice := command.Buffer
-	for i := 0; len(bufSlice) > 0; i++ {
-		var part []byte
-		command.ArgCount++
-
-		spacePos := bytes.IndexByte(bufSlice, ' ')
-		if spacePos == -1 {
-			// Couldn't find it! The part is the buffer up to the newline.
-			part = bufSlice[:len(bufSlice)-2]
-			// Although, if the part is empty, we don't have a real arg - need to decrement the arg counter
-			if len(part) == 0 {
-				command.ArgCount--
-			}
-			bufSlice = bufSlice[0:0]
-		} else {
-			part = bufSlice[:spacePos]
-
-			// Skip the spacePos var past the space
-			for bufSlice[spacePos] == ' ' {
-				spacePos++
-			}
-			bufSlice = bufSlice[spacePos:]
-		}
-
+	for i, part := range parts {
 		if i == 0 {
-			command.Command = part
-		} else if i == 1 {
-			command.FirstArg = part
+			c.Command = part
+
+			for i := 0; i < len(c.Command); i++ {
+				if c.Command[i] >= 'A' && c.Command[i] <= 'Z' {
+					c.Command[i] = c.Command[i] + 0x20
+				}
+			}
+
+			continue
 		}
+
+		if len(part) == 0 {
+			continue
+		}
+
+		if c.FirstArg == nil {
+			c.FirstArg = part
+		}
+
+		c.ArgCount++
 	}
-	return command, nil
+
+	return c, nil
 }
 
 // Satisfy Command Interface
