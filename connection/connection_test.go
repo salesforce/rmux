@@ -36,9 +36,7 @@ func verifySelectDatabaseSuccess(test *testing.T, database int) {
 	//write buffer will be used for verification
 	w := new(bytes.Buffer)
 	w.Reset()
-	//Make a small buffer, just to confirm occasional flushes
-	buf := bufio.NewWriterSize(w, 38)
-	testConnection.ReadWriter = bufio.NewReadWriter(readBuf, buf)
+	testConnection.Scanner = protocol.NewRespScanner(readBuf)
 	err = testConnection.SelectDatabase(database)
 
 	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
@@ -70,9 +68,7 @@ func verifySelectDatabaseError(test *testing.T, database int) {
 	//write buffer will be used for verification
 	w := new(bytes.Buffer)
 	w.Reset()
-	//Make a small buffer, just to confirm occasional flushes
-	buf := bufio.NewWriterSize(w, 38)
-	testConnection.ReadWriter = bufio.NewReadWriter(readBuf, buf)
+	testConnection.Scanner = protocol.NewRespScanner(readBuf)
 	err = testConnection.SelectDatabase(database)
 
 	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
@@ -105,7 +101,7 @@ func verifySelectDatabaseTimeout(test *testing.T, database int) {
 	w.Reset()
 	//Make a small buffer, just to confirm occasional flushes
 	buf := bufio.NewWriterSize(w, 38)
-	testConnection.ReadWriter.Writer = buf
+	testConnection.Writer = buf
 	err = testConnection.SelectDatabase(database)
 
 	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))

@@ -197,6 +197,7 @@ func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 			}
 		}
 
+		protocol.Debug("Closing client connection.")
 		myClient.Connection.Close()
 	}()
 
@@ -218,24 +219,41 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	// Create background i/o thread
 	go client.ReadLoop()
 	defer func() {
+		protocol.Debug("Client command handling loop closing")
 		// If the multiplexer goes down, deactivate this client.
 		client.Active = false
 	}()
 
 	for this.active && client.Active {
 		select {
+		case firstCommand := <-client.ReadChannel:
+			this.HandleCommandChunk(client, firstCommand)
 		case error := <-client.ErrorChannel:
 			this.HandleError(client, error)
-		case command := <-client.ReadChannel:
-			this.HandleCommand(client, command)
-		default:
-			if client.HasQueued() {
-				client.FlushRedisAndRespond()
-			}
+		case <-time.After(time.Second * 1):
+			// Allow heartbeat checks to happen once a second
 		}
 	}
 
 	// TODO defer closing stuff?
+}
+
+func (this *RedisMultiplexer) HandleCommandChunk(client *Client, command protocol.Command) {
+	this.HandleCommand(client, command)
+
+ChunkLoop:
+	for this.active && client.Active {
+		select {
+		case command := <-client.ReadChannel:
+			this.HandleCommand(client, command)
+		default:
+			break ChunkLoop
+		}
+	}
+
+	if client.HasQueued() {
+		client.FlushRedisAndRespond()
+	}
 }
 
 func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {

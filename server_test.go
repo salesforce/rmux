@@ -17,6 +17,7 @@ import (
 	"net"
 	"testing"
 	"time"
+	"github.com/forcedotcom/rmux/protocol"
 )
 
 func TestCountActiveConnections(test *testing.T) {
@@ -52,7 +53,7 @@ func TestCountActiveConnections(test *testing.T) {
 	}
 
 	connection := server.ConnectionCluster[0].GetConnection()
-	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
+	connection.Scanner = protocol.NewRespScanner(bufio.NewReader(bytes.NewBufferString("+PONG\r\n")))
 	server.ConnectionCluster[0].RecycleRemoteConnection(connection)
 
 	listenSock2, err := net.Listen("unix", "/tmp/rmuxTest2.sock")
@@ -63,7 +64,7 @@ func TestCountActiveConnections(test *testing.T) {
 		listenSock2.Close()
 	}()
 	connection = server.ConnectionCluster[1].GetConnection()
-	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
+	connection.Scanner = protocol.NewRespScanner(bufio.NewReader(bytes.NewBufferString("+PONG\r\n")))
 	server.ConnectionCluster[1].RecycleRemoteConnection(connection)
 
 	connectionCount = server.countActiveConnections()

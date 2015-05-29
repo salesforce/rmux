@@ -164,10 +164,9 @@ func (test *ProtocolTester) verifyGoodCopyServerResponse(goodMessage, extraMessa
 	writer := bufio.NewWriterSize(w, 100)
 
 	buf := bufio.NewReader(bytes.NewBufferString(strings.Join([]string{goodMessage, extraMessage}, "")))
-	//If this looks hacky, that's because it is
-	//bufio.NewReader doesn't call fill() upon init, so we have to force it
-	buf.Peek(1)
-	err := CopyServerResponses(buf, writer, 1)
+	scanner := NewRespScanner(buf)
+
+	err := CopyServerResponses(scanner, writer, 1)
 	if err != nil {
 		test.Fatalf("CopyServerResponse fataled on %q", goodMessage)
 	}

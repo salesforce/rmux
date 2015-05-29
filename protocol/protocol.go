@@ -14,7 +14,6 @@ package protocol
 import (
 	"bufio"
 	"io"
-	//	"time"
 	"bytes"
 )
 
@@ -423,16 +422,26 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(remoteBuffer *bufio.Reader, localBuffer *bufio.Writer, numResponses int) error {
+func CopyServerResponses(scanner *bufio.Scanner, localBuffer *bufio.Writer, numResponses int) error {
 	for i := 0; i < numResponses; i++ {
-		err := CopyServerResponse(remoteBuffer, localBuffer)
+//		sstart := time.Now()
+		if !scanner.Scan() {
+			Debug("Got an error oh god panic %q", scanner.Err())
+			return scanner.Err()
+		}
+//		Debug("Scan time %s", time.Since(sstart))
+
+//		wstart := time.Now()
+		_, err := localBuffer.Write(scanner.Bytes())
 		if err != nil {
-			Debug("Got an error oh god panic %q", err.Error())
 			return err
 		}
+//		Debug("Write time %s", time.Since(wstart))
 	}
 
+//	fstart := time.Now()
 	localBuffer.Flush()
+//	Debug("Flush time %s", time.Since(fstart))
 
 	return nil
 }

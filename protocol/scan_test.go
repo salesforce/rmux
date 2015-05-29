@@ -33,8 +33,7 @@ func TestScanResp(t *testing.T) {
 	}
 
 	for _, d := range testData {
-		s := bufio.NewScanner(getReader(d.inBytes))
-		s.Split(ScanResp)
+		s := NewRespScanner(getReader(d.inBytes))
 
 		scanned := [][]byte{}
 		for i := 0; s.Scan(); i++ {

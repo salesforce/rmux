@@ -15,7 +15,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/forcedotcom/rmux/connection"
 	"github.com/forcedotcom/rmux/protocol"
 	"io"
@@ -67,8 +66,7 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	newClient.queued = make([]protocol.Command, 0, 4)
 	newClient.HashRing = hashRing
 	newClient.DatabaseId = 0
-	newClient.Scanner = bufio.NewScanner(connection)
-	newClient.Scanner.Split(protocol.ScanResp)
+	newClient.Scanner = protocol.NewRespScanner(connection)
 	return
 }
 
@@ -183,6 +181,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	if !this.Multiplexing {
 		connectionPool = this.HashRing.DefaultConnectionPool
 	} else {
+//		connectionPool = this.HashRing.GetConnectionPool()
 		// TODO - kind of complicated, can only do one command at a time
 	}
 
@@ -214,14 +213,14 @@ func (this *Client) FlushRedisAndRespond() error {
 	writeEnd := time.Since(writeStart)
 
 	copyStart := time.Now()
-	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
+	if err := protocol.CopyServerResponses(redisConn.Scanner, this.Writer, numCommands); err != nil {
 		return err
 	}
 	copyEnd := time.Since(copyStart)
 
 	this.Writer.Flush()
 
-	fmt.Printf("all %s getConn %s write %s copyResponse %s\r\n", time.Since(start), connEnd, writeEnd, copyEnd)
+	protocol.Debug("all %s getConn %s write %s copyResponse %s", time.Since(start), connEnd, writeEnd, copyEnd)
 
 	return nil
 }
@@ -240,6 +239,12 @@ func (this *Client) ReadLoop() {
 		} else {
 			this.ReadChannel <- command
 		}
+	}
+
+	if err := this.Scanner.Err(); err != nil {
+		this.ErrorChannel <- err
+	} else {
+		this.ErrorChannel <- io.EOF
 	}
 }
 

@@ -2,11 +2,23 @@ package protocol
 
 import (
 	"bytes"
+	"io"
+	"bufio"
 )
 
 // ================== Base =================
+func NewRespScanner(r io.Reader) *bufio.Scanner {
+	scanner := bufio.NewScanner(r)
+	scanner.Split(ScanResp)
+	return scanner
+}
+
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	if len(data) == 0 {
 		return 0, nil, nil
 	}
 
@@ -51,8 +63,8 @@ func scanNewline(data []byte, atEOF bool) (advance int, token []byte, err error)
 			}
 		} else if iNL < 0 {
 			if atEOF {
-				// Read out the rest of the data if EOF'd
-				return len(data), data, nil
+				// Advance to the end, don't return anything
+				return len(data), nil, nil
 			} else {
 				// No newline found, ask for more
 				return 0, nil, nil
@@ -153,6 +165,10 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return 0, nil, nil
 	}
 
+	if len(data) == 0 {
+		return 0, nil, nil
+	}
+
 	if data[0] != '*' {
 		return 0, nil, ERROR_COMMAND_PARSE
 	}
@@ -160,12 +176,15 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	advance, token, err = scanNewline(data, atEOF)
 	if err != nil {
 		return advance, nil, err
-	} else if advance == 0 {
+	} else if advance == 0 || token == nil || len(token) < 3 {
+		if len(token) < 3 && len(token) > 0 {
+			Debug("Hm. %q", token)
+		}
 		// Asking for more data
 		return 0, nil, nil
 	}
 
-	arrayCountBytes := token[1 : len(token)-2]
+	arrayCountBytes := token[1 : len(token) - 2]
 	if len(arrayCountBytes) == 0 {
 		return 0, nil, ERROR_COMMAND_PARSE
 	}
