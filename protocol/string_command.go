@@ -26,6 +26,8 @@ func ParseStringCommand(b []byte) (*StringCommand, error) {
 	strLen, err := ParseInt(c.Buffer[1:newlinePos])
 	if err != nil {
 		return nil, err
+	} else if strLen < 0 {
+		return c, err
 	}
 
 	c.Command = c.Buffer[newlinePos + 2:newlinePos + 2 + strLen]

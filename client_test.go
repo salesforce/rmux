@@ -27,10 +27,10 @@ func TestReadCommand(t *testing.T) {
 		argCount int
 		arg1     string
 	}{
-		{"ping", "ping", 0, ""},
-		{"PING", "ping", 0, ""},
-		{"+ping", "ping", 0, ""},
-		{"select 1", "select", 1, "1"},
+		{"ping\r\n", "ping", 0, ""},
+		{"PING\r\n", "ping", 0, ""},
+		{"+ping\r\n", "ping", 0, ""},
+		{"select 1\r\n", "select", 1, "1"},
 		{"*1\r\n$4\r\nping\r\n", "ping", 0, ""},
 		{"*2\r\n$6\r\nselect\r\n$1\r\n1\r\n", "select", 1, "1"},
 		{"*2\r\n$6\r\nselect\r\n$1\r\na\r\n", "select", 1, "a"},
@@ -83,9 +83,9 @@ func TestParseCommand(test *testing.T) {
 		err               error
 	}{
 		//should accept inline format
-		{protocol.SHORT_PING_COMMAND, protocol.PONG_RESPONSE, nil},
+		{[]byte("PING\r\n"), protocol.PONG_RESPONSE, nil},
 		//should accept simple format
-		{protocol.PING_COMMAND, protocol.PONG_RESPONSE, nil},
+		{[]byte("+PING\r\n"), protocol.PONG_RESPONSE, nil},
 		//should accept multibulk format
 		{[]byte("*1\r\n$4\r\nping\r\n"), protocol.PONG_RESPONSE, nil},
 		//quit in proper format should respond appropriately

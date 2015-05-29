@@ -336,6 +336,29 @@ func ParseInt(response []byte) (value int, err error) {
 	return
 }
 
+func ParseCommand(b []byte) (command Command, err error) {
+	if len(b) < 0 {
+		return nil, ERROR_COMMAND_PARSE
+	}
+
+	switch peek := b[0]; peek {
+	case '+':
+		command, err = ParseSimpleCommand(b)
+	case '$':
+		command, err = ParseStringCommand(b)
+	case '*':
+		command, err = ParseMultibulkCommand(b)
+	default:
+		if (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z') {
+			command, err = ParseInlineCommand(b)
+		} else {
+			command, err = nil, ERROR_INVALID_COMMAND_FORMAT
+		}
+	}
+
+	return
+}
+
 //Inspects the incoming payload and returns the command.
 func ReadCommand(source *bufio.Reader) (command Command, err error) {
 	resp, err := ReadResp(source)

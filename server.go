@@ -253,7 +253,8 @@ func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Com
 		if err != nil {
 			protocol.Debug("Error received when flushing an immediate response: %s", err)
 		}
-		continue
+
+		return
 	} else if err != nil {
 		if err == ERR_QUIT {
 			client.ErrorChannel <- err
@@ -266,7 +267,7 @@ func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Com
 			panic("Not sure how to handle this error: " + err.Error())
 		}
 
-		continue
+		return
 	}
 
 	// Otherwise, the command is ready to buffer to the connection.

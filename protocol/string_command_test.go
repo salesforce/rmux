@@ -54,6 +54,13 @@ var stringTestData = map[string]commandTestData{
 		"$42\r\nsomeverylongcommandthatprobablydoesntexist\r\n",
 		0,
 	},
+
+	"$-1\r\n": commandTestData{
+		"",
+		"",
+		"$-1\r\n",
+		0,
+	},
 }
 
 func TestStringCommand(test *testing.T) {
