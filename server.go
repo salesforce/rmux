@@ -226,61 +226,55 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 		select {
 		case error := <-client.ErrorChannel:
 			this.HandleError(client, error)
-		case commands := <-client.ReadChannel:
-			protocol.Debug("Got %d command(s)!", len(commands))
-			this.HandleCommands(client, commands)
-			//		default:
-			//			if client.HasQueued() {
-			//				client.FlushRedisAndRespond()
-			//			}
+		case command := <-client.ReadChannel:
+			this.HandleCommand(client, command)
+		default:
+			if client.HasQueued() {
+				client.FlushRedisAndRespond()
+			}
 		}
 	}
 
 	// TODO defer closing stuff?
 }
 
-func (this *RedisMultiplexer) HandleCommands(client *Client, commands []protocol.Command) {
-	for _, command := range commands {
-		immediateResponse, err := client.ParseCommand(command)
+func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
+	immediateResponse, err := client.ParseCommand(command)
 
-		if (immediateResponse != nil || err != nil) && client.HasQueued() {
-			// Need to respond to the client. Flush anything pending.
-			if err := client.FlushRedisAndRespond(); err != nil {
-				protocol.Debug("Error from FlushRedisAndRespond: %s", err)
-			}
+	if (immediateResponse != nil || err != nil) && client.HasQueued() {
+		// Need to respond to the client. Flush anything pending.
+		if err := client.FlushRedisAndRespond(); err != nil {
+			protocol.Debug("Error from FlushRedisAndRespond: %s", err)
 		}
-
-		if immediateResponse != nil {
-			err = client.FlushLine(immediateResponse)
-			if err != nil {
-				protocol.Debug("Error received when flushing an immediate response: %s", err)
-			}
-			continue
-		} else if err != nil {
-			if err == ERR_QUIT {
-				client.ErrorChannel <- err
-				return
-			} else if recErr, ok := err.(*protocol.RecoverableError); ok {
-				// Flush stuff back to the client, get rid of the rest on the read buffer.
-				client.FlushError(recErr)
-				client.DiscardReaderBytes()
-			} else {
-				panic("Not sure how to handle this error: " + err.Error())
-			}
-
-			continue
-		}
-
-		// Otherwise, the command is ready to buffer to the connection.
-		client.Queue(command)
 	}
 
-	if client.HasQueued() {
+	if immediateResponse != nil {
+		err = client.FlushLine(immediateResponse)
+		if err != nil {
+			protocol.Debug("Error received when flushing an immediate response: %s", err)
+		}
+		continue
+	} else if err != nil {
+		if err == ERR_QUIT {
+			client.ErrorChannel <- err
+			return
+		} else if recErr, ok := err.(*protocol.RecoverableError); ok {
+			// Flush stuff back to the client, get rid of the rest on the read buffer.
+			client.FlushError(recErr)
+			client.DiscardReaderBytes()
+		} else {
+			panic("Not sure how to handle this error: " + err.Error())
+		}
+
+		continue
+	}
+
+	// Otherwise, the command is ready to buffer to the connection.
+	client.Queue(command)
+
+	// If we're multiplexing, just handle one command at a time
+	if this.multiplexing && client.HasQueued(){
 		client.FlushRedisAndRespond()
-	}
-
-	if client.Writer.Buffered() > 0 {
-		client.Writer.Flush()
 	}
 }
 

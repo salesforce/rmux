@@ -30,7 +30,6 @@ func TestScanResp(t *testing.T) {
 				"+Test",
 			},
 		},
-		// TODO: Test case with arrays of arrays
 	}
 
 	for _, d := range testData {

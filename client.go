@@ -37,10 +37,11 @@ type Client struct {
 	//Whether or not this client connection is active or not
 	//Upon QUIT command, this gets toggled off
 	Active       bool
-	ReadChannel  chan []protocol.Command
+	ReadChannel  chan protocol.Command
 	ErrorChannel chan error
 	HashRing     *connection.HashRing
 	queued       []protocol.Command
+	Scanner *bufio.Scanner
 }
 
 var (
@@ -61,11 +62,13 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, 300, 300)
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
-	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane or configurable, these things don't grow automatically
+	newClient.ReadChannel = make(chan protocol.Command, 2048) // TODO: Something sane or configurable, these things don't grow automatically
 	newClient.ErrorChannel = make(chan error)
 	newClient.queued = make([]protocol.Command, 0, 4)
 	newClient.HashRing = hashRing
 	newClient.DatabaseId = 0
+	newClient.Scanner = bufio.NewScanner(connection)
+	newClient.Scanner.Split(protocol.ScanResp)
 	return
 }
 
@@ -229,18 +232,15 @@ func (this *Client) HasBufferedOutput() bool {
 
 // Read loop for this client - moves commands and channels to the worker loop
 func (this *Client) ReadLoop() {
-	// TODO: This needs to stop when the client dies or is deactivated.
-	for this.Active {
-		// Read any commands
-		commands, err := this.ReadBufferedCommands()
+	for this.Active && this.Scanner.Scan() {
+		bytes := this.Scanner.Bytes()
+		command, err := protocol.ParseCommand(bytes)
 		if err != nil {
 			this.ErrorChannel <- err
-		} else if len(commands) > 0 {
-			protocol.Debug("Got some commands %d", len(commands))
-			this.ReadChannel <- commands
+		} else {
+			this.ReadChannel <- command
 		}
 	}
-	protocol.Debug("Deactivated")
 }
 
 func (this *Client) resetQueued() {
