@@ -42,6 +42,23 @@ func NewRSimpleString() *RSimpleString {
 	return ss
 }
 
+func readLine(reader *bufio.Reader) ([]byte, error) {
+	read, err := reader.ReadBytes('\n')
+	if err != nil {
+		if err == bufio.ErrBufferFull {
+			Debug("Buffer is full...")
+		}
+		return nil, err
+	}
+
+	size := len(read) - 2
+	if size < 0 || read[size] != '\r' {
+		return nil, ERROR_COMMAND_PARSE
+	}
+
+	return read[:size], nil
+}
+
 func ReadRSimpleString(reader *bufio.Reader) (*RSimpleString, error) {
 	ss := NewRSimpleString()
 
@@ -53,11 +70,9 @@ func ReadRSimpleString(reader *bufio.Reader) (*RSimpleString, error) {
 	}
 	ss.Buffer = append(ss.Buffer, firstByte)
 
-	read, isPrefix, err := reader.ReadLine()
+	read, err := readLine(reader)
 	if err != nil {
 		return nil, err
-	} else if isPrefix {
-		return nil, ERROR_COMMAND_PARSE
 	}
 
 	ss.Buffer = append(ss.Buffer, read...)
@@ -119,11 +134,9 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 	}
 	bs.Buffer = append(bs.Buffer, firstByte)
 
-	lenStr, isPrefix, err := reader.ReadLine()
+	lenStr, err := readLine(reader)
 	if err != nil {
 		return nil, err
-	} else if isPrefix {
-		return nil, ERROR_INVALID_COMMAND_FORMAT
 	}
 	length, err := ParseInt(lenStr)
 	if err != nil {
@@ -197,11 +210,9 @@ func ReadRError(reader *bufio.Reader) (*RError, error) {
 	}
 	re.Buffer = append(re.Buffer, firstByte)
 
-	read, isPrefix, err := reader.ReadLine()
+	read, err := readLine(reader)
 	if err != nil {
 		return nil, err
-	} else if isPrefix {
-		return nil, ERROR_COMMAND_PARSE
 	}
 
 	re.Buffer = append(re.Buffer, read...)
@@ -238,11 +249,9 @@ func ReadRInteger(reader *bufio.Reader) (*RInteger, error) {
 	}
 	ri.Buffer = append(ri.Buffer, firstByte)
 
-	read, isPrefix, err := reader.ReadLine()
+	read, err := readLine(reader)
 	if err != nil {
 		return nil, err
-	} else if isPrefix {
-		return nil, ERROR_COMMAND_PARSE
 	}
 
 	ri.Buffer = append(ri.Buffer, read...)
@@ -276,8 +285,7 @@ func NewRInlineString() *RInlineString {
 func ReadRInlineString(reader *bufio.Reader) (*RInlineString, error) {
 	is := NewRInlineString()
 
-	// TODO: Handle the isPrefix return value as an error condition... but how?
-	fullBuffer, _, err := reader.ReadLine()
+	fullBuffer, err := readLine(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -349,11 +357,9 @@ func ReadRArray(reader *bufio.Reader) (data *RArray, err error) {
 	ra.Buffer = append(ra.Buffer, firstByte)
 
 	// Read the number of parts
-	partCountStr, isPrefix, err := reader.ReadLine()
+	partCountStr, err := readLine(reader)
 	if err != nil {
 		return nil, err
-	} else if isPrefix {
-		return nil, ERROR_COMMAND_PARSE
 	}
 	ra.Buffer = append(ra.Buffer, partCountStr...)
 	ra.Buffer = append(ra.Buffer, "\r\n"...)
@@ -400,6 +406,14 @@ func ReadResp(reader *bufio.Reader) (data RespData, err error) {
 	}
 
 	peek := peeked[0]
+	Debug("Peeked %q, have %d left in buffer", peek, reader.Buffered())
+	if reader.Buffered() < 20 {
+		v, _ := reader.Peek(reader.Buffered())
+		Debug("Next %d in buffer: %q", reader.Buffered(), v)
+	} else {
+		v, _ := reader.Peek(20)
+		Debug("Next 20 in buffer: %q", v)
+	}
 
 	switch {
 	case peek == '+':
@@ -416,6 +430,10 @@ func ReadResp(reader *bufio.Reader) (data RespData, err error) {
 		data, err = ReadRInlineString(reader)
 	default:
 		data, err = nil, ERROR_INVALID_COMMAND_FORMAT
+	}
+
+	if err != nil {
+		Debug("RadResp Error: %s", err.Error())
 	}
 
 	return data, err

@@ -57,6 +57,8 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	newClient.Connection = connection
 	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection))
 	newClient.ConnectionReadWriter = newClient.ReadWriter
+//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, readTimeout, writeTimeout)
+//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, 300, 300)
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
 	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane or configurable, these things don't grow automatically
@@ -115,7 +117,6 @@ func (this *Client) ReadBufferedCommands() (buffered []protocol.Command, err err
 				//We had a read timeout. Return what we have.
 				return buffered, nil
 			} else if err == io.EOF {
-				protocol.Debug("EOF!")
 				return nil, err
 			} else {
 				// Discard the rest on the read buffer.
@@ -235,9 +236,11 @@ func (this *Client) ReadLoop() {
 		if err != nil {
 			this.ErrorChannel <- err
 		} else if len(commands) > 0 {
+			protocol.Debug("Got some commands %d", len(commands))
 			this.ReadChannel <- commands
 		}
 	}
+	protocol.Debug("Deactivated")
 }
 
 func (this *Client) resetQueued() {
