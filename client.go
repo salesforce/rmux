@@ -15,12 +15,12 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/forcedotcom/rmux/connection"
 	"github.com/forcedotcom/rmux/protocol"
 	"io"
 	"net"
 	"time"
-	"fmt"
 )
 
 //Represents a redis client that is connected to our rmux server
@@ -57,8 +57,8 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	newClient.Connection = connection
 	newClient.ReadWriter = bufio.NewReadWriter(bufio.NewReader(connection), bufio.NewWriter(connection))
 	newClient.ConnectionReadWriter = newClient.ReadWriter
-//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, readTimeout, writeTimeout)
-//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, 300, 300)
+	//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, readTimeout, writeTimeout)
+	//	newClient.ConnectionReadWriter = protocol.NewTimedNetReadWriter(connection, 300, 300)
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
 	newClient.ReadChannel = make(chan []protocol.Command, 2048) // TODO: Something sane or configurable, these things don't grow automatically

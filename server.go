@@ -229,10 +229,10 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 		case commands := <-client.ReadChannel:
 			protocol.Debug("Got %d command(s)!", len(commands))
 			this.HandleCommands(client, commands)
-//		default:
-//			if client.HasQueued() {
-//				client.FlushRedisAndRespond()
-//			}
+			//		default:
+			//			if client.HasQueued() {
+			//				client.FlushRedisAndRespond()
+			//			}
 		}
 	}
 

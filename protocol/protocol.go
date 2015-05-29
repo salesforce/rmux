@@ -14,7 +14,7 @@ package protocol
 import (
 	"bufio"
 	"io"
-//	"time"
+	//	"time"
 	"bytes"
 )
 
@@ -321,7 +321,7 @@ func ParseInt(response []byte) (value int, err error) {
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
 		if b > 9 {
-			Debug("ParseInt: Invalid int character: %q when parsing %q", b + '0', response)
+			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
 			err = ERROR_INVALID_INT
 			return
 		}
@@ -529,15 +529,15 @@ func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *b
 }
 
 func CopyServerResponse(reader *bufio.Reader, writer *bufio.Writer) error {
-//	startTime := time.Now()
-//	defer func() {
-//		Debug("Time to copy response: %s", time.Since(startTime))
-//	}()
+	//	startTime := time.Now()
+	//	defer func() {
+	//		Debug("Time to copy response: %s", time.Since(startTime))
+	//	}()
 
 	// Read the first line
-//	readStart := time.Now()
+	//	readStart := time.Now()
 	line, isPrefix, err := reader.ReadLine()
-//	Debug("Time to read the first line %s", time.Since(readStart))
+	//	Debug("Time to read the first line %s", time.Since(readStart))
 	if err != nil {
 		return err
 	} else if isPrefix || len(line) < 2 {

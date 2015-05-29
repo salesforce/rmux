@@ -156,9 +156,9 @@ func ReadRBulkString(reader *bufio.Reader) (*RBulkString, error) {
 	nRead, err := reader.Read(strSlice)
 	if err != nil {
 		return nil, err
-	} else if nRead != length + 2 {
+	} else if nRead != length+2 {
 		return nil, ERROR_COMMAND_PARSE // TODO: Maybe not enough read error or something
-	} else if strSlice[length] != '\r' || strSlice[length + 1] != '\n' {
+	} else if strSlice[length] != '\r' || strSlice[length+1] != '\n' {
 		return nil, ERROR_COMMAND_PARSE
 	}
 
