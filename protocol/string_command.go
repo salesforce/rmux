@@ -1,61 +1,47 @@
 package protocol
 
 import (
-	"bufio"
-	"fmt"
+	"bytes"
 )
 
 type StringCommand struct {
 	Buffer []byte
-	// Every string command *should* fit within 20 bytes. The slice above will resize properly in append() if not though.
-	buffer [20]byte
+	Command []byte
 }
 
-func NewStringCommand() *StringCommand {
-	sc := &StringCommand{}
-	sc.Buffer = sc.buffer[0:0]
-	return sc
-}
+func ParseStringCommand(b []byte) (*StringCommand, error) {
+	c := &StringCommand{}
+	c.Buffer = make([]byte, len(b))
+	copy(c.Buffer, b)
 
-func ReadStringCommand(reader *bufio.Reader) (*StringCommand, error) {
-	sc := NewStringCommand()
-
-	firstByte, err := reader.ReadByte()
-	if err != nil {
-		return nil, err
-	} else if firstByte != '$' {
-		return nil, fmt.Errorf("Expected '$', got '%c'", firstByte)
+	if c.Buffer[0] != '$' {
+		return nil, ERROR_COMMAND_PARSE
 	}
-	sc.Buffer = append(sc.Buffer, firstByte)
 
-	lenStr, _, err := reader.ReadLine()
+	newlinePos := bytes.Index(c.Buffer, REDIS_NEWLINE)
+	if newlinePos < 0 {
+		return nil, ERROR_COMMAND_PARSE
+	}
+
+	strLen, err := ParseInt(c.Buffer[1:newlinePos])
 	if err != nil {
 		return nil, err
 	}
 
-	sc.Buffer = append(sc.Buffer, lenStr...)
-	sc.Buffer = append(sc.Buffer, "\r\n"...)
-
-	len, err := ParseInt(lenStr)
-	if err != nil {
-		return nil, err
+	c.Command = c.Buffer[newlinePos + 2:newlinePos + 2 + strLen]
+	for i := 0; i < len(c.Command); i++ {
+		// lowercase it
+		if char := c.Command[i]; char >= 'A' && char <= 'Z' {
+			c.Command[i] = c.Command[i] + 0x20
+		}
 	}
 
-	// Also read the newline
-	strSlice := make([]byte, len+2)
-	_, err = reader.Read(strSlice)
-	if err != nil {
-		return nil, err
-	}
-
-	sc.Buffer = append(sc.Buffer, strSlice...)
-
-	return sc, nil
+	return c, nil
 }
 
 // Satisfy Command Interface
 func (this *StringCommand) GetCommand() []byte {
-	return nil
+	return this.Command
 }
 
 func (this *StringCommand) GetBuffer() []byte {
