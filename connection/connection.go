@@ -19,6 +19,7 @@ import (
 	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"time"
+	. "github.com/forcedotcom/rmux/writer"
 )
 
 //An outbound connection to a redis server
@@ -26,7 +27,7 @@ import (
 type Connection struct {
 	connection net.Conn
 	//The underlying ReadWriter for this connection
-	*bufio.Writer
+	Writer *FlexibleWriter
 	//The database that we are currently connected to
 	DatabaseId int
 	//The connection wrapper for our net connection
@@ -45,7 +46,7 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 	newConnection = &Connection{}
 //	newConnection.ConnectionReadWriter = protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
 //	newConnection.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newConnection.ConnectionReadWriter), bufio.NewWriter(newConnection.ConnectionReadWriter))
-	newConnection.Writer = bufio.NewWriter(remoteConnection)
+	newConnection.Writer = NewFlexibleWriter(remoteConnection)
 	newConnection.DatabaseId = 0
 	newConnection.Scanner = protocol.NewRespScanner(remoteConnection)
 	return

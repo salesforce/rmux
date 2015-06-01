@@ -77,6 +77,7 @@ func (this *RedisMultiplexer) initializeCleanup() {
 	signal.Notify(c, syscall.SIGTERM)
 	// Block until we have a kill-request to pop off
 	<-c
+	panic("Rawr")
 	//Flag ourselves as cleaning up
 	this.active = false
 	//And close our listener
@@ -217,7 +218,8 @@ func (this *RedisMultiplexer) sendMultiplexInfo(myClient *Client) (err error) {
 //If they are, finds the appropriate connection pool, and passes the request off to it.
 func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	// Create background i/o thread
-	go client.ReadLoop()
+	go client.ReadLoop(this)
+
 	defer func() {
 		protocol.Debug("Client command handling loop closing")
 		// If the multiplexer goes down, deactivate this client.
@@ -226,10 +228,13 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 
 	for this.active && client.Active {
 		select {
-		case firstCommand := <-client.ReadChannel:
-			this.HandleCommandChunk(client, firstCommand)
-		case error := <-client.ErrorChannel:
-			this.HandleError(client, error)
+		case item := <-client.ReadChannel:
+			if item.command != nil {
+				this.HandleCommandChunk(client, item.command)
+			}
+			if item.err != nil {
+				this.HandleError(client, item.err)
+			}
 		case <-time.After(time.Second * 1):
 			// Allow heartbeat checks to happen once a second
 		}
@@ -238,49 +243,49 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	// TODO defer closing stuff?
 }
 
+// This looks a lot like HandleClientRequests above, but will break and flush to redis if the default is met.
+// Will allow it to handle a pipeline of commands without spinning indefinitely.
 func (this *RedisMultiplexer) HandleCommandChunk(client *Client, command protocol.Command) {
 	this.HandleCommand(client, command)
 
 ChunkLoop:
 	for this.active && client.Active {
 		select {
-		case command := <-client.ReadChannel:
-			this.HandleCommand(client, command)
+		case item := <-client.ReadChannel:
+			protocol.Debug("Read a command off the channel.")
+			if item.command != nil {
+				this.HandleCommand(client, item.command)
+			}
+			if item.err != nil {
+				this.HandleError(client, item.err)
+			}
+			protocol.Debug("Moving on...")
 		default:
 			break ChunkLoop
 		}
 	}
 
-	if client.HasQueued() {
-		client.FlushRedisAndRespond()
-	}
+	protocol.Debug("Flushin' everything")
+	client.FlushRedisAndRespond()
 }
 
 func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
 	immediateResponse, err := client.ParseCommand(command)
 
-	if (immediateResponse != nil || err != nil) && client.HasQueued() {
-		// Need to respond to the client. Flush anything pending.
-		if err := client.FlushRedisAndRespond(); err != nil {
-			protocol.Debug("Error from FlushRedisAndRespond: %s", err)
-		}
-	}
-
 	if immediateResponse != nil {
-		err = client.FlushLine(immediateResponse)
+		err = client.WriteLine(immediateResponse)
 		if err != nil {
-			protocol.Debug("Error received when flushing an immediate response: %s", err)
+			protocol.Debug("Error received when writing an immediate response: %s", err)
 		}
 
 		return
 	} else if err != nil {
 		if err == ERR_QUIT {
-			client.ErrorChannel <- err
+			client.WriteLine(protocol.OK_RESPONSE)
+			client.ReadChannel <- readItem{nil, err}
 			return
 		} else if recErr, ok := err.(*protocol.RecoverableError); ok {
-			// Flush stuff back to the client, get rid of the rest on the read buffer.
-			client.FlushError(recErr)
-			client.DiscardReaderBytes()
+			client.WriteError(recErr, false)
 		} else {
 			panic("Not sure how to handle this error: " + err.Error())
 		}
@@ -302,11 +307,7 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		return
 	}
 
-	protocol.Debug("Error: %s", err)
-
 	if err == ERR_QUIT {
-		// Respond with OK, deactivate ourselves
-		client.FlushLine(protocol.OK_RESPONSE)
 		client.Active = false
 		return
 	} else if recErr, ok := err.(*protocol.RecoverableError); ok {

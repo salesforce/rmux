@@ -66,6 +66,13 @@ var multibulkTestData = map[string]commandTestData{
 		"*2\r\n$3\r\ndel\r\n$-1\r\n",
 		1,
 	},
+
+	"*1\r\n$4\r\nPING\r\n": commandTestData{
+		"ping",
+		"",
+		"*1\r\n$4\r\nping\r\n",
+		0,
+	},
 }
 
 func TestMultibulkCommand(test *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"io"
 	"bytes"
 	"time"
+	. "github.com/forcedotcom/rmux/writer"
 )
 
 const (
@@ -341,16 +342,19 @@ func ParseCommand(b []byte) (command Command, err error) {
 		return nil, ERROR_COMMAND_PARSE
 	}
 
-	switch peek := b[0]; peek {
+	bc := make([]byte, len(b))
+	copy(bc, b)
+
+	switch peek := bc[0]; peek {
 	case '+':
-		command, err = ParseSimpleCommand(b)
+		command, err = ParseSimpleCommand(bc)
 	case '$':
-		command, err = ParseStringCommand(b)
+		command, err = ParseStringCommand(bc)
 	case '*':
-		command, err = ParseMultibulkCommand(b)
+		command, err = ParseMultibulkCommand(bc)
 	default:
 		if (peek >= 'a' && peek <= 'z') || (peek >= 'A' && peek <= 'Z') {
-			command, err = ParseInlineCommand(b)
+			command, err = ParseInlineCommand(bc)
 		} else {
 			command, err = nil, ERROR_INVALID_COMMAND_FORMAT
 		}
@@ -372,13 +376,13 @@ func ReadCommand(source *bufio.Reader) (command Command, err error) {
 }
 
 //Writes the command to the buffer
-func WriteCommand(command Command, dest *bufio.Writer, flush bool) (err error) {
+func WriteCommand(command Command, dest *FlexibleWriter, flush bool) (err error) {
 	return WriteLine(command.GetBuffer(), dest, flush)
 }
 
 //Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
 //Bubbles any errors from underlying writer
-func WriteError(line []byte, dest *bufio.Writer, flush bool) (err error) {
+func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
 	_, err = dest.Write([]byte("-ERR "))
 	if err != nil {
 		Debug("WriteError: Error received from write: %s", err)
@@ -400,7 +404,7 @@ func WriteError(line []byte, dest *bufio.Writer, flush bool) (err error) {
 
 //Writes the given line to the buffer, followed by a GO_NEWLINE
 //Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
-func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
+func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error) {
 	// startTime := time.Now()
 	_, err = destination.Write(line)
 	if err != nil {
@@ -423,7 +427,7 @@ func WriteLine(line []byte, destination *bufio.Writer, flush bool) (err error) {
 
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(scanner *bufio.Scanner, localBuffer *bufio.Writer, numResponses int) error {
+func CopyServerResponses(scanner *bufio.Scanner, localBuffer *FlexibleWriter, numResponses int) error {
 	Debug("CopyServerResponse %d", numResponses)
 	for i := 0; i < numResponses; i++ {
 		sstart := time.Now()
@@ -453,7 +457,7 @@ func CopyServerResponses(scanner *bufio.Scanner, localBuffer *bufio.Writer, numR
 
 //Copies a single bulk message from source to destination, beginning with firstLine
 //If a protocol or a buffer error is encountered, it is bubbled up
-func CopyBulkMessage(firstLine []byte, source *bufio.Reader, destination *bufio.Writer) (err error) {
+func CopyBulkMessage(firstLine []byte, source *bufio.Reader, destination *FlexibleWriter) (err error) {
 	if len(firstLine) < 2 || firstLine[0] != '$' {
 		err = ERROR_BAD_BULK_FORMAT
 		Debug("copyBulkMessage: Invalid bulk response first line")
@@ -527,7 +531,7 @@ func CopyBulkMessage(firstLine []byte, source *bufio.Reader, destination *bufio.
 
 //Copies a multi bulk message from source to destination, beginning with firstLine
 //If a protocol or a buffer error is encountered, it is bubbled up
-func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *bufio.Writer) (err error) {
+func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *FlexibleWriter) (err error) {
 	//validate format
 	if len(firstLine) < 2 || firstLine[0] != '*' {
 		err = ERROR_BAD_BULK_FORMAT
@@ -565,7 +569,7 @@ func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *b
 	return
 }
 
-func CopyServerResponse(reader *bufio.Reader, writer *bufio.Writer) error {
+func CopyServerResponse(reader *bufio.Reader, writer *FlexibleWriter) error {
 	//	startTime := time.Now()
 	//	defer func() {
 	//		Debug("Time to copy response: %s", time.Since(startTime))
