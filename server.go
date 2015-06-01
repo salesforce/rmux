@@ -252,20 +252,17 @@ ChunkLoop:
 	for this.active && client.Active {
 		select {
 		case item := <-client.ReadChannel:
-			protocol.Debug("Read a command off the channel.")
 			if item.command != nil {
 				this.HandleCommand(client, item.command)
 			}
 			if item.err != nil {
 				this.HandleError(client, item.err)
 			}
-			protocol.Debug("Moving on...")
 		default:
 			break ChunkLoop
 		}
 	}
 
-	protocol.Debug("Flushin' everything")
 	client.FlushRedisAndRespond()
 }
 

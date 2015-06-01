@@ -16,7 +16,6 @@ import (
 	"bytes"
 	. "github.com/forcedotcom/rmux/writer"
 	"io"
-	"time"
 )
 
 const (
@@ -428,29 +427,22 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
 func CopyServerResponses(scanner *bufio.Scanner, localBuffer *FlexibleWriter, numResponses int) error {
-	Debug("CopyServerResponse %d", numResponses)
 	for i := 0; i < numResponses; i++ {
-		sstart := time.Now()
 		if !scanner.Scan() {
 			Debug("Got an error oh god panic %q", scanner.Err())
 			return scanner.Err()
 		}
-		Debug("Scan time %s", time.Since(sstart))
 
-		wstart := time.Now()
 		_, err := localBuffer.Write(scanner.Bytes())
 		if err != nil {
 			return err
 		}
-		Debug("Write time %s", time.Since(wstart))
 	}
 
-	fstart := time.Now()
 	err := localBuffer.Flush()
 	if err != nil {
 		return err
 	}
-	Debug("Flush time %s", time.Since(fstart))
 
 	return nil
 }

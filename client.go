@@ -112,7 +112,6 @@ func (this *Client) FlushLine(line []byte) (err error) {
 
 // Performs the query against the redis server and responds to the connected client with the response from redis.
 func (this *Client) FlushRedisAndRespond() error {
-	protocol.Debug("Flushing")
 	if !this.HasQueued() {
 		this.Writer.Flush()
 		return nil
@@ -150,7 +149,6 @@ func (this *Client) FlushRedisAndRespond() error {
 	numCommands := len(this.queued)
 	protocol.Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
-		protocol.Debug("Buffer: %q", command.GetBuffer())
 		redisConn.Writer.Write(command.GetBuffer())
 	}
 	this.resetQueued()
@@ -183,16 +181,12 @@ func (this *Client) ReadLoop(rmux *RedisMultiplexer) {
 	for rmux.active && this.Active && this.Scanner.Scan() {
 		bytes := this.Scanner.Bytes()
 		command, err := protocol.ParseCommand(bytes)
-		protocol.Debug("Puting onto channel: %q", command.GetBuffer())
 		this.ReadChannel <- readItem{command, err}
-		protocol.Debug("Done")
 	}
 
 	if err := this.Scanner.Err(); err != nil {
-		protocol.Debug("Puting onto channel: %q", err)
 		this.ReadChannel <- readItem{nil, err}
 	} else {
-		protocol.Debug("Puting onto channel: %q", io.EOF)
 		this.ReadChannel <- readItem{nil, io.EOF}
 	}
 }
