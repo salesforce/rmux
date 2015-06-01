@@ -13,10 +13,10 @@ package protocol
 
 import (
 	"bufio"
-	"io"
 	"bytes"
-	"time"
 	. "github.com/forcedotcom/rmux/writer"
+	"io"
+	"time"
 )
 
 const (

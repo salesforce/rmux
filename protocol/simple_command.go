@@ -18,7 +18,7 @@ func ParseSimpleCommand(b []byte) (*SimpleCommand, error) {
 		return nil, fmt.Errorf("Expected '+', got '%c'", c.Buffer[0])
 	}
 
-	c.Command = c.Buffer[1:len(c.Buffer)-2]
+	c.Command = c.Buffer[1 : len(c.Buffer)-2]
 	for i := 0; i < len(c.Command); i++ {
 		// lowercase it
 		if char := c.Command[i]; char >= 'A' && char <= 'Z' {

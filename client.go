@@ -25,7 +25,7 @@ import (
 
 type readItem struct {
 	command protocol.Command
-	err error
+	err     error
 }
 
 //Represents a redis client that is connected to our rmux server
@@ -34,16 +34,16 @@ type Client struct {
 	Writer *FlexibleWriter
 	//Whether or not this client needs to consider multiplexing
 	Multiplexing bool
-	Connection           net.Conn
+	Connection   net.Conn
 	//The Database that our client thinks we're connected to
 	DatabaseId int
 	//Whether or not this client connection is active or not
 	//Upon QUIT command, this gets toggled off
-	Active       bool
+	Active      bool
 	ReadChannel chan readItem
-	HashRing     *connection.HashRing
-	queued       []protocol.Command
-	Scanner *bufio.Scanner
+	HashRing    *connection.HashRing
+	queued      []protocol.Command
+	Scanner     *bufio.Scanner
 }
 
 var (
@@ -124,7 +124,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	if !this.Multiplexing {
 		connectionPool = this.HashRing.DefaultConnectionPool
 	} else {
-//		connectionPool = this.HashRing.GetConnectionPool()
+		//		connectionPool = this.HashRing.GetConnectionPool()
 		// TODO - kind of complicated, can only do one command at a time
 	}
 

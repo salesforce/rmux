@@ -5,7 +5,7 @@ import (
 )
 
 type StringCommand struct {
-	Buffer []byte
+	Buffer  []byte
 	Command []byte
 }
 
@@ -30,7 +30,7 @@ func ParseStringCommand(b []byte) (*StringCommand, error) {
 		return c, err
 	}
 
-	c.Command = c.Buffer[newlinePos + 2:newlinePos + 2 + strLen]
+	c.Command = c.Buffer[newlinePos+2 : newlinePos+2+strLen]
 	for i := 0; i < len(c.Command); i++ {
 		// lowercase it
 		if char := c.Command[i]; char >= 'A' && char <= 'Z' {

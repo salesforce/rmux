@@ -17,9 +17,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/forcedotcom/rmux/protocol"
+	. "github.com/forcedotcom/rmux/writer"
 	"net"
 	"time"
-	. "github.com/forcedotcom/rmux/writer"
 )
 
 //An outbound connection to a redis server
@@ -31,7 +31,7 @@ type Connection struct {
 	//The database that we are currently connected to
 	DatabaseId int
 	//The connection wrapper for our net connection
-//	ConnectionReadWriter *protocol.TimedNetReadWriter
+	//	ConnectionReadWriter *protocol.TimedNetReadWriter
 	Scanner *bufio.Scanner
 }
 
@@ -44,8 +44,8 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 		return nil
 	}
 	newConnection = &Connection{}
-//	newConnection.ConnectionReadWriter = protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
-//	newConnection.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newConnection.ConnectionReadWriter), bufio.NewWriter(newConnection.ConnectionReadWriter))
+	//	newConnection.ConnectionReadWriter = protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
+	//	newConnection.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newConnection.ConnectionReadWriter), bufio.NewWriter(newConnection.ConnectionReadWriter))
 	newConnection.Writer = NewFlexibleWriter(remoteConnection)
 	newConnection.DatabaseId = 0
 	newConnection.Scanner = protocol.NewRespScanner(remoteConnection)
@@ -67,7 +67,7 @@ func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
 	}
 	buf := myConnection.Scanner.Bytes()
 
-	if !bytes.Equal(buf[:len(buf) - 2], protocol.OK_RESPONSE) {
+	if !bytes.Equal(buf[:len(buf)-2], protocol.OK_RESPONSE) {
 		protocol.Debug("SelectDatabase: Invalid response for select: %s", buf)
 		err = errors.New("Invalid select response")
 	}

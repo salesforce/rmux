@@ -297,7 +297,7 @@ func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Com
 	client.Queue(command)
 
 	// If we're multiplexing, just handle one command at a time
-	if this.multiplexing && client.HasQueued(){
+	if this.multiplexing && client.HasQueued() {
 		client.FlushRedisAndRespond()
 	}
 }

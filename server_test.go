@@ -14,10 +14,10 @@ package rmux
 import (
 	"bufio"
 	"bytes"
+	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"testing"
 	"time"
-	"github.com/forcedotcom/rmux/protocol"
 )
 
 func TestCountActiveConnections(test *testing.T) {

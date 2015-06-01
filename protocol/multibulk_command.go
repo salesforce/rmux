@@ -7,7 +7,7 @@ import (
 var NIL_STRING []byte = nil
 
 type MultibulkCommand struct {
-	Buffer []byte
+	Buffer  []byte
 	Command []byte
 	// Usually denotes the key
 	FirstArg []byte
@@ -37,7 +37,7 @@ func ParseMultibulkCommand(b []byte) (*MultibulkCommand, error) {
 		c.ArgCount = count - 1
 	}
 
-	cBuf := c.Buffer[newlinePos + 2:]
+	cBuf := c.Buffer[newlinePos+2:]
 	for i := 0; i < 2 && i < count; i++ {
 		if cBuf[0] != '$' {
 			return nil, ERROR_COMMAND_PARSE
@@ -52,17 +52,17 @@ func ParseMultibulkCommand(b []byte) (*MultibulkCommand, error) {
 		if err != nil {
 			return nil, err
 		} else if count < 0 {
-			cBuf = cBuf[newlinePos + 2:]
+			cBuf = cBuf[newlinePos+2:]
 			continue
 		}
 
 		if i == 0 {
-			c.Command = cBuf[newlinePos + 2:newlinePos + 2 + count]
+			c.Command = cBuf[newlinePos+2 : newlinePos+2+count]
 		} else {
-			c.FirstArg = cBuf[newlinePos + 2:newlinePos + 2 + count]
+			c.FirstArg = cBuf[newlinePos+2 : newlinePos+2+count]
 		}
 
-		cBuf = cBuf[newlinePos + 2 + count + 2:]
+		cBuf = cBuf[newlinePos+2+count+2:]
 	}
 
 	for i := 0; i < len(c.Command); i++ {

@@ -5,7 +5,7 @@ import (
 )
 
 type InlineCommand struct {
-	Buffer []byte
+	Buffer  []byte
 	Command []byte
 	// Usually denotes the key
 	FirstArg []byte
@@ -27,7 +27,7 @@ func ParseInlineCommand(b []byte) (*InlineCommand, error) {
 	c.Buffer = make([]byte, len(b))
 	copy(c.Buffer, b)
 
-	parts := bytes.Split(c.Buffer[:len(c.Buffer) - 2], []byte(" "))
+	parts := bytes.Split(c.Buffer[:len(c.Buffer)-2], []byte(" "))
 
 	for i, part := range parts {
 		if i == 0 {

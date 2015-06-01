@@ -1,9 +1,9 @@
 package protocol
 
 import (
+	"bufio"
 	"bytes"
 	"io"
-	"bufio"
 )
 
 // ================== Base =================
@@ -14,7 +14,7 @@ func NewRespScanner(r io.Reader) *bufio.Scanner {
 }
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
-//	Debug("Scanning %q", data)
+	//	Debug("Scanning %q", data)
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -42,11 +42,11 @@ func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		}
 	}
 
-//	if err != nil {
-//		Debug("Scanned an error %s", err)
-//	} else {
-//		Debug("Scanned a chunk %d %q", advance, token)
-//	}
+	//	if err != nil {
+	//		Debug("Scanned an error %s", err)
+	//	} else {
+	//		Debug("Scanned a chunk %d %q", advance, token)
+	//	}
 
 	return
 }
@@ -196,7 +196,7 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return 0, nil, nil
 	}
 
-	arrayCountBytes := token[1 : len(token) - 2]
+	arrayCountBytes := token[1 : len(token)-2]
 	if len(arrayCountBytes) == 0 {
 		return 0, nil, ERROR_COMMAND_PARSE
 	}
