@@ -14,6 +14,7 @@ func NewRespScanner(r io.Reader) *bufio.Scanner {
 }
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	Debug("Scanning %q", data)
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -39,6 +40,12 @@ func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		} else {
 			advance, token, err = 0, nil, ERROR_INVALID_COMMAND_FORMAT
 		}
+	}
+
+	if err != nil {
+		Debug("Scanned an error %s", err)
+	} else {
+		Debug("Scanned a chunk %d %q", advance, token)
 	}
 
 	return
@@ -99,10 +106,11 @@ func ScanBulkString(data []byte, atEOF bool) (advance int, token []byte, err err
 	}
 
 	advance, token, err = scanNewline(data, atEOF)
-	if err != nil {
-		return advance, nil, err
-	} else if advance == 0 {
-		// Asking for more data
+	if err != nil || advance == 0 {
+		return advance, token, err
+	}
+
+	if len(token) < 4 {
 		return 0, nil, nil
 	}
 
@@ -114,6 +122,10 @@ func ScanBulkString(data []byte, atEOF bool) (advance int, token []byte, err err
 	strLen, err := ParseInt(strLenBytes)
 	if err != nil {
 		return advance, nil, err
+	}
+
+	if strLen < 0 {
+		return advance, data[:advance], nil
 	}
 
 	if len(data[advance:]) < 2+strLen {

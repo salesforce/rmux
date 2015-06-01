@@ -78,6 +78,7 @@ func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
 //Checks if the current connection is up or not
 //If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
 func (myConnection *Connection) CheckConnection() bool {
+	return true
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
 		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)

@@ -302,7 +302,7 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		return
 	}
 
-	protocol.Debug("Handling an error: %s", err)
+	protocol.Debug("Error: %s", err)
 
 	if err == ERR_QUIT {
 		// Respond with OK, deactivate ourselves
@@ -315,6 +315,7 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		return
 	} else if err == io.EOF {
 		// Stream EOF-ed. Deactivate this client and break out.
+		client.FlushRedisAndRespond()
 		client.Active = false
 		return
 	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {

@@ -206,14 +206,18 @@ func (this *Client) FlushRedisAndRespond() error {
 	numCommands := len(this.queued)
 	protocol.Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
+		protocol.Debug("Buffer: %q", command.GetBuffer())
 		redisConn.Write(command.GetBuffer())
 	}
 	this.resetQueued()
-	redisConn.Writer.Flush()
+	for redisConn.Writer.Buffered() > 0 {
+		redisConn.Writer.Flush()
+	}
 	writeEnd := time.Since(writeStart)
 
 	copyStart := time.Now()
 	if err := protocol.CopyServerResponses(redisConn.Scanner, this.Writer, numCommands); err != nil {
+		this.ErrorChannel <- err
 		return err
 	}
 	copyEnd := time.Since(copyStart)
@@ -258,5 +262,9 @@ func (this *Client) HasQueued() bool {
 }
 
 func (this *Client) Queue(command protocol.Command) {
+	if len(this.queued) >= 2048 {
+		this.FlushRedisAndRespond()
+	}
+
 	this.queued = append(this.queued, command)
 }

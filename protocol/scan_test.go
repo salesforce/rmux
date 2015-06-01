@@ -24,12 +24,17 @@ func TestScanResp(t *testing.T) {
 			},
 		},
 		{
-			"*2\r\n*2\r\n+OK\r\n+PING\r\n*2\r\n$6\r\nSELECT\r\n:5\r\n+Test",
+			"*2\r\n*2\r\n+OK\r\n+PING\r\n*2\r\n$6\r\nSELECT\r\n:5\r\n+Test\r\n",
 			[]string {
 				"*2\r\n*2\r\n+OK\r\n+PING\r\n*2\r\n$6\r\nSELECT\r\n:5\r\n",
-				"+Test",
+				"+Test\r\n",
 			},
 		},
+		{ "$-1\r\n$-1\r\n", []string{"$-1\r\n", "$-1\r\n"} },
+		{ "*2\r\n$-1\r\n$-1\r\n", []string{"*2\r\n$-1\r\n$-1\r\n"} },
+
+		// Check for panic case in testing
+		{ "$", []string{ } },
 	}
 
 	for _, d := range testData {
@@ -52,6 +57,7 @@ func TestScanResp(t *testing.T) {
 
 		if len(scanned) != len(d.outResp) {
 			t.Errorf("Did not receive expected number of scan results from %q. Expected %d, Got %d", d.inBytes, len(d.outResp), len(scanned))
+			t.Errorf("Received results %q", scanned)
 		}
 	}
 }
