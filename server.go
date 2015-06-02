@@ -77,7 +77,6 @@ func (this *RedisMultiplexer) initializeCleanup() {
 	signal.Notify(c, syscall.SIGTERM)
 	// Block until we have a kill-request to pop off
 	<-c
-	panic("Rawr")
 	//Flag ourselves as cleaning up
 	this.active = false
 	//And close our listener
