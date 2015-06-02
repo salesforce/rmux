@@ -57,55 +57,10 @@ func TestParseInt(test *testing.T) {
 	tester.verifyParseIntResponse([]byte("10"), 10)
 }
 
-// Verifies that the given bad command errors
-func (test *ProtocolTester) verifyGetCommandError(badCommand string) {
-	buf := bufio.NewReader(bytes.NewBufferString(badCommand))
-	//If this looks hacky, that's because it is
-	//bufio.NewReader doesn't call fill() upon init, so we have to force it
-	buf.Peek(1)
-	_, err := ReadCommand(buf)
-	if err == nil {
-		test.Errorf("GetCommand did not err on %q", badCommand)
-	}
-}
-
 func (test *ProtocolTester) compareString(str1, str2 string) {
 	if str1 != str2 {
 		test.Errorf("Did not receive correct string values %s %s", str1, str2)
 	}
-}
-
-func (test *ProtocolTester) verifyGetCommandResponse(validMessage, expectedCommand string, expectedArgument string) {
-	buf := bufio.NewReader(bytes.NewBufferString(validMessage))
-	//If this looks hacky, that's because it is
-	//bufio.NewReader doesn't call fill() upon init, so we have to force it
-	buf.Peek(1)
-	command, err := ReadCommand(buf)
-
-	if err != nil {
-		test.Errorf("Received unexpected error from ReadCommand(%q): %s", validMessage, err)
-		return
-	}
-
-	test.compareString(string(command.GetCommand()), expectedCommand)
-	test.compareString(string(command.GetFirstArg()), expectedArgument)
-}
-
-func TestGetCommand(test *testing.T) {
-	tester := &ProtocolTester{test}
-	tester.verifyGetCommandError("$4\r\ninf")
-	tester.verifyGetCommandError("$4\r\ninfo")
-	tester.verifyGetCommandError("$4\r\ninfo\r")
-	tester.verifyGetCommandError("$a\r\ninfo")
-
-	tester.verifyGetCommandResponse("$3\r\nget\r\n$1a", "get", "")
-	tester.verifyGetCommandResponse("$3\r\nget\r\n$a", "get", "")
-	tester.verifyGetCommandResponse("$3\r\nget\r\n$1\r\naa", "get", "")
-	tester.verifyGetCommandResponse("$4\r\niNfo\r\n", "info", "")
-
-	tester.verifyGetCommandResponse("info\r\n", "info", "")
-	tester.verifyGetCommandResponse("*1\r\n$4\r\niNfo\r\n", "info", "")
-	tester.verifyGetCommandResponse("*2\r\n$3\r\nget\r\n$1\r\na\r\n", "get", "a")
 }
 
 func TestWriteLine(test *testing.T) {
@@ -176,20 +131,6 @@ func (test *ProtocolTester) verifyGoodCopyServerResponse(goodMessage, extraMessa
 
 	if !bytes.Equal(w.Bytes(), []byte(goodMessage)) {
 		test.Fatalf("Our buffer is missing data? %q %q", w.Bytes(), []byte(goodMessage))
-	}
-}
-
-func BenchmarkGetCommand(bench *testing.B) {
-	bench.ResetTimer()
-	bench.StopTimer()
-	for i := 0; i < bench.N; i++ {
-		buf := bufio.NewReader(bytes.NewBufferString("$3\r\nget\r\n$3\r\nabc\r\n"))
-		//If this looks hacky, that's because it is
-		//bufio.NewReader doesn't call fill() upon init, so we have to force it
-		buf.Peek(1)
-		bench.StartTimer()
-		ReadCommand(buf)
-		bench.StopTimer()
 	}
 }
 

@@ -13,9 +13,7 @@ package protocol
 
 import (
 	"bufio"
-	"bytes"
 	. "github.com/forcedotcom/rmux/writer"
-	"io"
 )
 
 const (
@@ -24,14 +22,9 @@ const (
 )
 
 var (
-	//The refuse heap is a dumping ground for ignored data
-	REFUSE_HEAP = [BUFFER_SIZE]byte{}
-
 	//Used when we are trying to parse the size of a bulk or multibulk message, and do not receive a valid number
 	ERROR_INVALID_INT            = &RecoverableError{"Did not receive valid int value"}
 	ERROR_INVALID_COMMAND_FORMAT = &RecoverableError{"Bad command format provided"}
-	//Used when we inspect a packet, and it is using the deprecated messaging format
-	ERROR_MULTIBULK_FORMAT_REQUIRED = &RecoverableError{"Multibulk format is required"}
 	//Used when we expect a redis bulk-format payload, and do not receive one
 	ERROR_BAD_BULK_FORMAT = &RecoverableError{"Bad bulk format supplied"}
 	ERROR_COMMAND_PARSE   = &RecoverableError{"Command parse error"}
@@ -362,11 +355,6 @@ func ParseCommand(b []byte) (command Command, err error) {
 	return
 }
 
-//Writes the command to the buffer
-func WriteCommand(command Command, dest *FlexibleWriter, flush bool) (err error) {
-	return WriteLine(command.GetBuffer(), dest, flush)
-}
-
 //Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
 //Bubbles any errors from underlying writer
 func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
@@ -430,158 +418,6 @@ func CopyServerResponses(scanner *bufio.Scanner, localBuffer *FlexibleWriter, nu
 	err := localBuffer.Flush()
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-//Copies a single bulk message from source to destination, beginning with firstLine
-//If a protocol or a buffer error is encountered, it is bubbled up
-func CopyBulkMessage(firstLine []byte, source *bufio.Reader, destination *FlexibleWriter) (err error) {
-	if len(firstLine) < 2 || firstLine[0] != '$' {
-		err = ERROR_BAD_BULK_FORMAT
-		Debug("copyBulkMessage: Invalid bulk response first line")
-		return
-	}
-
-	if bytes.Equal(firstLine, ERR_RESPONSE) {
-		//If we have a $-1, that's nil.  write and flush
-		err = WriteLine(ERR_RESPONSE, destination, false)
-		if err != nil {
-			Debug("copyBulkMessage: Error received from writeLine: %s", err)
-		}
-		return
-	}
-
-	//add two for the newline
-	n, err := ParseInt(firstLine[1:])
-	if err != nil {
-		Debug("copyBulkMessage: Error received from ParseInt: %s", err)
-		return
-	}
-
-	err = WriteLine(firstLine, destination, false)
-	if err != nil {
-		Debug("copyBulkMessage: Error received from writeLine: %s", err)
-		return
-	}
-
-	written, err := io.CopyN(destination, source, int64(n))
-	if err != nil {
-		Debug("copyBulkMessage: Error received from io.CopyN: %s", err)
-		return
-	}
-
-	if written != int64(n) {
-		Debug("copyBulkMessage: Ran out of bytes to copy: %s", err)
-		return
-	}
-
-	char, err := source.ReadByte()
-	if err != nil {
-		Debug("copyBulkMessage: Error received from readByte: %s", err)
-		return
-	}
-
-	if char != '\r' {
-		Debug("copyBulkMessage: Missing carriage-return character", err)
-		err = ERROR_BAD_BULK_FORMAT
-		return
-	}
-
-	char, err = source.ReadByte()
-	if err != nil {
-		Debug("copyBulkMessage: Error received from readByte: %s", err)
-		return
-	}
-	if char != '\n' {
-		Debug("copyBulkMessage: Missing newline character", err)
-		err = ERROR_BAD_BULK_FORMAT
-		return
-	}
-
-	_, err = destination.Write(REDIS_NEWLINE)
-	if err != nil {
-		Debug("copyBulkMessage: Error received from write: %s", err)
-		return
-	}
-
-	return
-}
-
-//Copies a multi bulk message from source to destination, beginning with firstLine
-//If a protocol or a buffer error is encountered, it is bubbled up
-func CopyMultiBulkMessage(firstLine []byte, source *bufio.Reader, destination *FlexibleWriter) (err error) {
-	//validate format
-	if len(firstLine) < 2 || firstLine[0] != '*' {
-		err = ERROR_BAD_BULK_FORMAT
-		Debug("IgnoreMultiBulkMessage: Invalid multibulk response first line")
-		return
-	}
-
-	n, err := ParseInt(firstLine[1:])
-	if err != nil {
-		Debug("CopyMultiBulkMessage: Error received from ParseInt: %s", err)
-		return
-	}
-
-	err = WriteLine(firstLine, destination, false)
-	if err != nil {
-		Debug("CopyMultiBulkMessage: Error received from writeLine: %s", err)
-		return
-	}
-
-	for i := 0; i < n; i++ {
-		firstLine, _, err = source.ReadLine()
-		if err != nil {
-			return
-		}
-		err = CopyBulkMessage(firstLine, source, destination)
-		if err != nil {
-			return
-		}
-	}
-	err = destination.Flush()
-	if err != nil {
-		Debug("CopyMultiBulkMessage: Error received from Flush: %s", err)
-		return
-	}
-	return
-}
-
-func CopyServerResponse(reader *bufio.Reader, writer *FlexibleWriter) error {
-	//	startTime := time.Now()
-	//	defer func() {
-	//		Debug("Time to copy response: %s", time.Since(startTime))
-	//	}()
-
-	// Read the first line
-	//	readStart := time.Now()
-	line, isPrefix, err := reader.ReadLine()
-	//	Debug("Time to read the first line %s", time.Since(readStart))
-	if err != nil {
-		return err
-	} else if isPrefix || len(line) < 2 {
-		return ERROR_BAD_BULK_FORMAT
-	}
-
-	if line[0] == '$' {
-		// Bulk string format
-		err = CopyBulkMessage(line, reader, writer)
-		if err != nil {
-			return err
-		}
-	} else if line[0] == '*' && line[1] != '-' {
-		err = CopyMultiBulkMessage(line, reader, writer)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Integers, errors, simple strings, inline strings
-		err = WriteLine(line, writer, false)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
