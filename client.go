@@ -123,8 +123,10 @@ func (this *Client) FlushRedisAndRespond() error {
 	if !this.Multiplexing {
 		connectionPool = this.HashRing.DefaultConnectionPool
 	} else {
-		//		connectionPool = this.HashRing.GetConnectionPool()
-		// TODO - kind of complicated, can only do one command at a time
+		if len(this.queued) != 1 {
+			panic("Should not have multiple commands to flush when multiplexing")
+		}
+		connectionPool = this.HashRing.GetConnectionPool(this.queued[0])
 	}
 
 	connStart := time.Now()

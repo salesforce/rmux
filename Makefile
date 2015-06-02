@@ -41,4 +41,7 @@ run-example-dev: build-dev
 run-profile: build
 	./build/rmux -config=./example/config.json -cpuProfile=./build/profile.prof
 
+run-example-mux: build
+	./build/rmux -config=./example/config-mux.json
+
 .PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile
