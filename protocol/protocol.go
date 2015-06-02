@@ -362,18 +362,6 @@ func ParseCommand(b []byte) (command Command, err error) {
 	return
 }
 
-//Inspects the incoming payload and returns the command.
-func ReadCommand(source *bufio.Reader) (command Command, err error) {
-	resp, err := ReadResp(source)
-	if err != nil {
-		return nil, err
-	}
-
-	command, err = WrapRespCommand(resp)
-
-	return command, err
-}
-
 //Writes the command to the buffer
 func WriteCommand(command Command, dest *FlexibleWriter, flush bool) (err error) {
 	return WriteLine(command.GetBuffer(), dest, flush)
