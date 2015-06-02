@@ -33,6 +33,7 @@ type Connection struct {
 	//The connection wrapper for our net connection
 	//	ConnectionReadWriter *protocol.TimedNetReadWriter
 	Scanner *bufio.Scanner
+	Reader *bufio.Reader
 }
 
 //Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
@@ -48,7 +49,7 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 	//	newConnection.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newConnection.ConnectionReadWriter), bufio.NewWriter(newConnection.ConnectionReadWriter))
 	newConnection.Writer = NewFlexibleWriter(remoteConnection)
 	newConnection.DatabaseId = 0
-	newConnection.Scanner = protocol.NewRespScanner(remoteConnection)
+	newConnection.Reader = bufio.NewReader(remoteConnection)
 	return
 }
 

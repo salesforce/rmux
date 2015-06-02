@@ -160,7 +160,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	writeEnd := time.Since(writeStart)
 
 	copyStart := time.Now()
-	if err := protocol.CopyServerResponses(redisConn.Scanner, this.Writer, numCommands); err != nil {
+	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
 		protocol.Debug("Error copying server responses: %s", err)
 		this.ReadChannel <- readItem{nil, err}
 		return err

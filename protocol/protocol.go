@@ -12,8 +12,9 @@
 package protocol
 
 import (
-	"bufio"
 	. "github.com/forcedotcom/rmux/writer"
+	"bytes"
+	"bufio"
 )
 
 const (
@@ -402,21 +403,33 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(scanner *bufio.Scanner, localBuffer *FlexibleWriter, numResponses int) error {
-	for i := 0; i < numResponses; i++ {
-		if !scanner.Scan() {
-			Debug("Got an error oh god panic %q", scanner.Err())
-			return scanner.Err()
-		}
+func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
+	b := make([]byte, 2048)
+	buf := new(bytes.Buffer)
 
-		_, err := localBuffer.Write(scanner.Bytes())
+	for numRead := 0; numRead < numResponses; {
+		Debug("Attempting to write into the buffer...")
+		n, err := reader.Read(b)
 		if err != nil {
+			Debug("Got error while reading from redis: %s", err)
 			return err
+		}
+		buf.Write(b[:n])
+
+		if n, token, err := ScanResp(buf.Bytes(), false); err != nil {
+			Debug("Got error while scanning resp: %s", err)
+			return err
+		} else if token != nil {
+			toWrite := buf.Next(n)
+			Debug("Writing to client: %q", toWrite)
+			localBuffer.Write(toWrite)
+
+			numRead++
 		}
 	}
 
-	err := localBuffer.Flush()
 	if err != nil {
+		Debug("Error %s", err)
 		return err
 	}
 
