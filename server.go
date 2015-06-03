@@ -303,6 +303,10 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 		return
 	}
 
+	if err != io.EOF {
+		protocol.Debug("Error: %s", err)
+	}
+
 	if err == ERR_QUIT {
 		client.Active = false
 		return

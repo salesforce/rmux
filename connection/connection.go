@@ -32,7 +32,6 @@ type Connection struct {
 	DatabaseId int
 	//The connection wrapper for our net connection
 	//	ConnectionReadWriter *protocol.TimedNetReadWriter
-	Scanner *bufio.Scanner
 	Reader *bufio.Reader
 }
 
@@ -45,35 +44,33 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 		return nil
 	}
 	newConnection = &Connection{}
-	//	newConnection.ConnectionReadWriter = protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
-	//	newConnection.ReadWriter = bufio.NewReadWriter(bufio.NewReader(newConnection.ConnectionReadWriter), bufio.NewWriter(newConnection.ConnectionReadWriter))
-	newConnection.Writer = NewFlexibleWriter(remoteConnection)
+	netReadWriter := protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
+	newConnection.Writer = NewFlexibleWriter(netReadWriter)
 	newConnection.DatabaseId = 0
-	newConnection.Reader = bufio.NewReader(remoteConnection)
+	newConnection.Reader = bufio.NewReader(netReadWriter)
 	return
 }
 
 //Selects the given database, for the connection
 //If an error is returned, or if an invalid response is returned from the select, then this will return an error
 //If not, the connections internal database will be updated accordingly
-func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
-	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), myConnection.Writer, true)
+func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
+	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
 	if err != nil {
 		protocol.Debug("SelectDatabase: Error received from protocol.FlushLine: %s", err)
 		return err
 	}
 
-	if !myConnection.Scanner.Scan() {
-		protocol.Debug("SelectDatabase: Could not scan", myConnection.Scanner.Err())
-	}
-	buf := myConnection.Scanner.Bytes()
-
-	if !bytes.Equal(buf[:len(buf)-2], protocol.OK_RESPONSE) {
-		protocol.Debug("SelectDatabase: Invalid response for select: %s", buf)
+	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
+		protocol.Debug("Could not successfully select db: err:%s isPrefix:%t readLine:%q", err, isPrefix, line)
 		err = errors.New("Invalid select response")
+		if this.connection != nil {
+			this.connection.Close()
+		}
+		return err
 	}
 
-	myConnection.DatabaseId = DatabaseId
+	this.DatabaseId = DatabaseId
 	return
 }
 
@@ -81,20 +78,20 @@ func (myConnection *Connection) SelectDatabase(DatabaseId int) (err error) {
 //If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
 func (myConnection *Connection) CheckConnection() bool {
 	return true
-	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
-	if err != nil {
-		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
-		return false
-	}
-
-	if !myConnection.Scanner.Scan() {
-		protocol.Debug("CheckConnection: Could not scan", myConnection.Scanner.Err())
-	}
-	buf := myConnection.Scanner.Bytes()
-
-	if err == nil && bytes.Equal(buf[:len(buf)-2], protocol.PONG_RESPONSE) {
-		return true
-	} else {
-		return false
-	}
+//	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
+//	if err != nil {
+//		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
+//		return false
+//	}
+//
+//	if !myConnection.Scanner.Scan() {
+//		protocol.Debug("CheckConnection: Could not scan", myConnection.Scanner.Err())
+//	}
+//	buf := myConnection.Scanner.Bytes()
+//
+//	if err == nil && bytes.Equal(buf[:len(buf)-2], protocol.PONG_RESPONSE) {
+//		return true
+//	} else {
+//		return false
+//	}
 }
