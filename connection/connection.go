@@ -77,21 +77,20 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 //Checks if the current connection is up or not
 //If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
 func (myConnection *Connection) CheckConnection() bool {
-	return true
-//	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
-//	if err != nil {
-//		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
-//		return false
-//	}
-//
-//	if !myConnection.Scanner.Scan() {
-//		protocol.Debug("CheckConnection: Could not scan", myConnection.Scanner.Err())
-//	}
-//	buf := myConnection.Scanner.Bytes()
-//
-//	if err == nil && bytes.Equal(buf[:len(buf)-2], protocol.PONG_RESPONSE) {
-//		return true
-//	} else {
-//		return false
-//	}
+	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
+	if err != nil {
+		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
+		return false
+	}
+
+	line, isPrefix, err := myConnection.Reader.ReadLine()
+	if err != nil || isPrefix {
+		protocol.Debug("CheckConnection: Could not ping: %s isPrefix: %t", err, isPrefix)
+	}
+
+	if err == nil && bytes.Equal(line, protocol.PONG_RESPONSE) {
+		return true
+	} else {
+		return false
+	}
 }
