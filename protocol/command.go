@@ -7,4 +7,3 @@ type Command interface {
 	GetFirstArg() []byte
 	GetArgCount() int
 }
-

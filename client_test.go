@@ -15,10 +15,10 @@ import (
 	"bufio"
 	"bytes"
 	"github.com/forcedotcom/rmux/protocol"
+	"github.com/forcedotcom/rmux/writer"
 	"net"
 	"testing"
 	"time"
-	"github.com/forcedotcom/rmux/writer"
 )
 
 //func TestReadCommand(t *testing.T) {

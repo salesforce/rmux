@@ -12,9 +12,9 @@
 package protocol
 
 import (
-	. "github.com/forcedotcom/rmux/writer"
-	"bytes"
 	"bufio"
+	"bytes"
+	. "github.com/forcedotcom/rmux/writer"
 )
 
 const (

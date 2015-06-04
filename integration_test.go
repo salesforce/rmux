@@ -3,10 +3,10 @@
 package rmux
 
 import (
-	"testing"
-	"net"
 	"bytes"
+	"net"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -17,7 +17,7 @@ type tRmux struct {
 
 var (
 	redisSock string = "/tmp/redis-test.sock"
-	rmuxSock string = "/tmp/rmux-test.sock"
+	rmuxSock  string = "/tmp/rmux-test.sock"
 )
 
 func StartRmux(t *testing.T) (r *tRmux) {
@@ -73,7 +73,7 @@ func checkResponse(t *testing.T, in string, expected string) {
 		t.Fatalf("Error writing command: %s", err)
 	}
 
-	buf := make([]byte, 8 * 1024)
+	buf := make([]byte, 8*1024)
 	b := new(bytes.Buffer)
 	sock.SetDeadline(time.Now().Add(1000 * time.Millisecond))
 	for read := 0; read < len(expected); {

@@ -14,9 +14,9 @@ func NewRespScanner(r io.Reader) *bufio.Scanner {
 }
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
-//	if len(data) > 0 {
-//		Debug("Scanning %q", data)
-//	}
+	//	if len(data) > 0 {
+	//		Debug("Scanning %q", data)
+	//	}
 
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil

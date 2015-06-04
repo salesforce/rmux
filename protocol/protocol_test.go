@@ -14,9 +14,9 @@ package protocol
 import (
 	"bufio"
 	"bytes"
+	"github.com/forcedotcom/rmux/writer"
 	"strings"
 	"testing"
-	"github.com/forcedotcom/rmux/writer"
 )
 
 type ProtocolTester struct {

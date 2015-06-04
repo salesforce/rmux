@@ -1,8 +1,8 @@
 package writer
 
 import (
-	"io"
 	"bytes"
+	"io"
 )
 
 const (

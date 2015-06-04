@@ -35,13 +35,13 @@ func TestScanResp(t *testing.T) {
 
 		// Check for panic case in testing
 		{"$", []string{}},
-/*
- 2a 32 0d 0a                                      *2..
- 24 33 0d 0a                                      $3..
- 47 45 54 0d 0a                                   GET..
- 24 31 34 0d 0a                                   $14..
- 6d 6f 6e 69 74 6f 72 5f 6d 61 73 74 65 72 0d 0a  monitor_master..
-  */
+		/*
+		   2a 32 0d 0a                                      *2..
+		   24 33 0d 0a                                      $3..
+		   47 45 54 0d 0a                                   GET..
+		   24 31 34 0d 0a                                   $14..
+		   6d 6f 6e 69 74 6f 72 5f 6d 61 73 74 65 72 0d 0a  monitor_master..
+		*/
 
 		{
 			"*2\r\n$3\r\nGET\r\n$14\r\nmonitor_master\r\n*3\r\n$7\r\nEVALSHA\r\n$40\r\n29e86375a0dc24139361139c9e8853cb34aa16a6\r\n$1\r\n0\r\nasdf",

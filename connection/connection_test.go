@@ -15,10 +15,10 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/forcedotcom/rmux/writer"
 	"net"
 	"testing"
 	"time"
-	"github.com/forcedotcom/rmux/writer"
 )
 
 func verifySelectDatabaseSuccess(test *testing.T, database int) {
