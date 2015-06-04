@@ -1,5 +1,6 @@
 GO=go
 #GO=/code/go15/bin/go
+REDISSERV=redis-server
 
 all: clean test build-dev build
 
@@ -13,10 +14,14 @@ test-dev:
 	$(GO) test -v -tags 'dev' ./...
 
 test-integration:
+	$(REDISSERV) $(PWD)/example/redis.conf
 	$(GO) test -v -tags 'integration' ./...
+	kill -TERM $(cat /tmp/redis-test-instance-for-rmux.pid)
 
-test-integration-debug:
+test-integration-dev:
+	$(REDISSERV) $(PWD)/example/redis.conf
 	$(GO) test -v -tags 'integration dev' ./...
+	kill -TERM $(cat /tmp/redis-test-instance-for-rmux.pid)
 
 fmt:
 	$(GO) fmt ./...
@@ -50,4 +55,4 @@ run-profile: build
 run-example-mux: build
 	./build/rmux -config=./example/config-mux.json
 
-.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile test-integration test-integration-debug
+.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile test-integration test-integration-dev
