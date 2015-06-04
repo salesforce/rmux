@@ -85,7 +85,7 @@ func (myConnection *Connection) CheckConnection() bool {
 
 	line, isPrefix, err := myConnection.Reader.ReadLine()
 	if err != nil || isPrefix {
-		protocol.Debug("CheckConnection: Could not ping: %s isPrefix: %t", err, isPrefix)
+		protocol.Debug("CheckConnection: Could not ping: %q isPrefix: %t", err, isPrefix)
 	}
 
 	if err == nil && bytes.Equal(line, protocol.PONG_RESPONSE) {

@@ -25,10 +25,12 @@ func TestCountActiveConnections(test *testing.T) {
 		test.Fatal("Cannot listen on /tmp/rmuxTest.sock: ", err)
 	}
 	defer func() {
+		server.active = false
 		server.Listener.Close()
 	}()
-	server.EndpointConnectTimeout = 1 * time.Millisecond
-	server.EndpointReadTimeout = 1 * time.Millisecond
+	server.EndpointConnectTimeout = 10 * time.Millisecond
+	server.EndpointReadTimeout = 10 * time.Millisecond
+	server.EndpointWriteTimeout = 10 * time.Millisecond
 
 	//create a pong-responder on ports 6378 and 6379
 	server.AddConnection("unix", "/tmp/rmuxTest1.sock")
@@ -39,9 +41,7 @@ func TestCountActiveConnections(test *testing.T) {
 	if err != nil {
 		test.Fatal("Cannot listen on /tmp/rmuxTest1.sock: ", err)
 	}
-	defer func() {
-		listenSock.Close()
-	}()
+	defer listenSock.Close()
 
 	connectionCount := server.countActiveConnections()
 

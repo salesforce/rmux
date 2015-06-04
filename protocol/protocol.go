@@ -407,6 +407,7 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 	b := make([]byte, 2048)
 	buf := new(bytes.Buffer)
 
+ScanLoop:
 	for numRead := 0; numRead < numResponses; {
 		Debug("Attempting to write into the buffer...")
 		n, err := reader.Read(b)
@@ -416,10 +417,17 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 		}
 		buf.Write(b[:n])
 
-		if n, token, err := ScanResp(buf.Bytes(), false); err != nil {
-			Debug("Got error while scanning resp: %s", err)
-			return err
-		} else if token != nil {
+		for {
+			n, token, err := ScanResp(buf.Bytes(), false)
+			if err != nil {
+				Debug("Got error while scanning resp: %s", err)
+				return err
+			}
+
+			if token == nil {
+				continue ScanLoop
+			}
+
 			toWrite := buf.Next(n)
 			Debug("Writing to client: %q", toWrite)
 			localBuffer.Write(toWrite)

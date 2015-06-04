@@ -28,17 +28,21 @@ type TimedNetReadWriter struct {
 
 //Wraps the net.connection's write function with a WriteDeadline
 func (myReadWriter *TimedNetReadWriter) Write(line []byte) (n int, err error) {
-	myReadWriter.NetConnection.SetWriteDeadline(time.Now().Add(myReadWriter.WriteTimeout))
+	if myReadWriter.WriteTimeout > 0 {
+		myReadWriter.NetConnection.SetWriteDeadline(time.Now().Add(myReadWriter.WriteTimeout))
+		defer myReadWriter.NetConnection.SetWriteDeadline(time.Time{})
+	}
 	n, err = myReadWriter.NetConnection.Write(line)
-	myReadWriter.NetConnection.SetWriteDeadline(time.Time{})
 	return
 }
 
 //Wraps the net.connection's read function with a ReadDeadline
 func (myReadWriter *TimedNetReadWriter) Read(line []byte) (n int, err error) {
-	myReadWriter.NetConnection.SetReadDeadline(time.Now().Add(myReadWriter.WriteTimeout))
+	if myReadWriter.ReadTimeout > 0 {
+		myReadWriter.NetConnection.SetReadDeadline(time.Now().Add(myReadWriter.ReadTimeout))
+		defer myReadWriter.NetConnection.SetReadDeadline(time.Time{})
+	}
 	n, err = myReadWriter.NetConnection.Read(line)
-	myReadWriter.NetConnection.SetReadDeadline(time.Time{})
 	return
 }
 
