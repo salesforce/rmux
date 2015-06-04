@@ -12,8 +12,6 @@
 package connection
 
 import (
-	"bufio"
-	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"testing"
 	"time"
@@ -45,7 +43,6 @@ func TestRecycleConnection(test *testing.T) {
 	listenSock.Close()
 	connectionPool.RecycleRemoteConnection(connection)
 	connectionPool.RecycleRemoteConnection(connection2)
-	test.Log("Listen socket was closed.  New connections should fail, but our current recycled connection count is 2")
 	connection = connectionPool.GetConnection()
 	if connection == nil {
 		test.Fatal("Failed to get first connection")
@@ -57,20 +54,15 @@ func TestRecycleConnection(test *testing.T) {
 	}
 
 	connection2 = connectionPool.GetConnection()
-	if connection2 == nil {
-		test.Log("Failed to get a new connection on a non-listened socket")
-	} else {
+	if connection2 != nil {
 		test.Fatal("Somehow, we got a new connection on a non-listened socket")
 	}
 
 	connectionPool.RecycleRemoteConnection(connection)
-	test.Log("Recycled a good connection one more time, to verify cycling")
 
 	connection = connectionPool.GetConnection()
 	if connection == nil {
 		test.Fatal("Failed to get recycled connection")
-	} else {
-		test.Log("Successfully retrieved recycled connection")
 	}
 }
 
@@ -94,36 +86,29 @@ func TestCheckConnectionState(test *testing.T) {
 	fd, err := listenSock.Accept()
 	if err != nil {
 		test.Fatal("Failed to accept connection")
-	} else {
-		localBuffer := bufio.NewReadWriter(bufio.NewReader(fd), bufio.NewWriter(fd))
-		test.Log("Shoving a single +PONG response in the buffer for testing")
-		protocol.WriteLine(protocol.PONG_RESPONSE, localBuffer.Writer, true)
+	}
+
+	// Write a pong response directly to the socket
+	if _, err := fd.Write([]byte("+PONG\r\n")); err != nil {
+		test.Fatal("Error writing to sock: %s", err)
 	}
 
 	temporaryConnection2 := connectionPool.GetConnection()
-	test.Log("The first connection (out of two) in the channel now has a valid pong response ready")
 	connectionPool.RecycleRemoteConnection(temporaryConnection)
 	connectionPool.RecycleRemoteConnection(temporaryConnection2)
 
-	if connectionPool.CheckConnectionState() {
-		test.Log("Valid connection's check connection succeeded")
-	} else {
+	if !connectionPool.CheckConnectionState() {
 		test.Fatal("Valid connection's checkheck connection failed")
 	}
 
 	if connectionPool.CheckConnectionState() {
 		test.Fatal("In-valid connection's checkheck connection succeeded")
-	} else {
-		test.Log("In-valid connection's checkheck connection failed")
 	}
 
-	test.Log("Closed the listen socket, so future connections can only come through the (hopefully empty) channel")
 	listenSock.Close()
 
 	temporaryConnection = connectionPool.GetConnection()
-	if temporaryConnection == nil {
-		test.Log("Connection channel was flushed, upon invalid connection check")
-	} else {
+	if temporaryConnection != nil {
 		test.Fatal("Connection channel was not flushed, upon invalid connection check")
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"github.com/forcedotcom/rmux/writer"
 )
 
 type ProtocolTester struct {
@@ -67,7 +68,7 @@ func TestWriteLine(test *testing.T) {
 	w := new(bytes.Buffer)
 	w.Reset()
 	//Make a small buffer, just to confirm occasional flushes
-	buf := bufio.NewWriterSize(w, 38)
+	buf := writer.NewFlexibleWriter(w)
 	//buffer of length 10 (8 plus \r\n)
 	ten_bytes := []byte("0123456789")
 	WriteLine(ten_bytes, buf, false)
@@ -85,10 +86,10 @@ func TestWriteLine(test *testing.T) {
 	if len(written) != 0 {
 		test.Fatal("Buffer flushed prematurely")
 	}
-	WriteLine([]byte{'1'}, buf, false)
+	WriteLine([]byte{'1'}, buf, true)
 	written = w.Bytes()
-	if len(written) != 38 {
-		test.Fatal("Buffer did not flush", len(written))
+	if len(written) != 39 {
+		test.Fatalf("Buffer did not flush correctly. got:%d expected:%d", len(written), 38)
 	}
 }
 
@@ -96,7 +97,7 @@ func TestFlushLine(test *testing.T) {
 	w := new(bytes.Buffer)
 	w.Reset()
 	//Make a small buffer, just to confirm occasional flushes
-	buf := bufio.NewWriterSize(w, 38)
+	buf := writer.NewFlexibleWriter(w)
 	//buffer of length 10 (8 plus \r\n)
 	ten_bytes := []byte("0123456789")
 	WriteLine(ten_bytes, buf, false)
@@ -116,16 +117,15 @@ func (test *ProtocolTester) verifyGoodCopyServerResponse(goodMessage, extraMessa
 	w := new(bytes.Buffer)
 	w.Reset()
 	//Make a small buffer, just to confirm occasional flushes
-	writer := bufio.NewWriterSize(w, 100)
+	writer := writer.NewFlexibleWriter(w)
 
-	buf := bufio.NewReader(bytes.NewBufferString(strings.Join([]string{goodMessage, extraMessage}, "")))
-	scanner := NewRespScanner(buf)
+	reader := bufio.NewReader(bytes.NewBufferString(strings.Join([]string{goodMessage, extraMessage}, "")))
 
-	err := CopyServerResponses(scanner, writer, 1)
+	err := CopyServerResponses(reader, writer, 1)
 	if err != nil {
 		test.Fatalf("CopyServerResponse fataled on %q", goodMessage)
 	}
-	if buf.Buffered() != len(extraMessage) {
+	if reader.Buffered() != len(extraMessage) {
 		test.Fatalf("CopyServerResponse did not leave the right stuff on the buffer %q", goodMessage)
 	}
 

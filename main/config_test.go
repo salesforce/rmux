@@ -97,7 +97,6 @@ var json3 = []byte(`
 
 func TestParseConfigJson_Json3_Error(test *testing.T) {
 	_, err := ParseConfigJson(json3)
-	test.Logf("%s", err)
 	if err == nil {
 		test.Fatalf("Should have errored attempting to parse json3")
 	}

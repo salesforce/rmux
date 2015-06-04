@@ -7,10 +7,16 @@ clean:
 	rm -f ./build/*
 
 test:
-	$(GO) test ./...
+	$(GO) test -v ./...
 
 test-dev:
-	$(GO) test -tags 'dev' ./...
+	$(GO) test -v -tags 'dev' ./...
+
+test-integration:
+	$(GO) test -v -tags 'integration' ./...
+
+test-integration-debug:
+	$(GO) test -v -tags 'integration dev' ./...
 
 fmt:
 	$(GO) fmt ./...
@@ -44,4 +50,4 @@ run-profile: build
 run-example-mux: build
 	./build/rmux -config=./example/config-mux.json
 
-.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile
+.PHONY: clean test test-dev mkbuild build build-all build-dev build-all-dev fmt run-example run-example-dev run-profile test-integration test-integration-debug

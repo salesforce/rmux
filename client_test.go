@@ -18,6 +18,7 @@ import (
 	"net"
 	"testing"
 	"time"
+	"github.com/forcedotcom/rmux/writer"
 )
 
 //func TestReadCommand(t *testing.T) {
@@ -122,7 +123,7 @@ func TestParseCommand(test *testing.T) {
 	for _, testCase := range testCases {
 		w := new(bytes.Buffer)
 		//Make a small buffer, just to confirm flushes
-		client.Writer = bufio.NewWriterSize(w, 38)
+		client.Writer = writer.NewFlexibleWriter(w)
 		client.Scanner = protocol.NewRespScanner(bufio.NewReader(bytes.NewBuffer(testCase.input)))
 
 		if client.Scanner.Scan() == false {

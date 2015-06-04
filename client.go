@@ -151,6 +151,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	numCommands := len(this.queued)
 	protocol.Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
+		protocol.Debug("Command %q %q", command.GetCommand(), command.GetFirstArg())
 		redisConn.Writer.Write(command.GetBuffer())
 	}
 	this.resetQueued()

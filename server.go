@@ -266,6 +266,7 @@ ChunkLoop:
 }
 
 func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
+	protocol.Debug("Writing out %q", command)
 	immediateResponse, err := client.ParseCommand(command)
 
 	if immediateResponse != nil {

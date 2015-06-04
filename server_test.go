@@ -14,7 +14,6 @@ package rmux
 import (
 	"bufio"
 	"bytes"
-	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"testing"
 	"time"
@@ -46,14 +45,12 @@ func TestCountActiveConnections(test *testing.T) {
 
 	connectionCount := server.countActiveConnections()
 
-	if connectionCount == 0 {
-		test.Log("Connection count is 0 as expected")
-	} else {
+	if connectionCount != 0 {
 		test.Fatal("Server thinks there are active connections, when there are none")
 	}
 
 	connection := server.ConnectionCluster[0].GetConnection()
-	connection.Scanner = protocol.NewRespScanner(bufio.NewReader(bytes.NewBufferString("+PONG\r\n")))
+	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
 	server.ConnectionCluster[0].RecycleRemoteConnection(connection)
 
 	listenSock2, err := net.Listen("unix", "/tmp/rmuxTest2.sock")
@@ -64,13 +61,11 @@ func TestCountActiveConnections(test *testing.T) {
 		listenSock2.Close()
 	}()
 	connection = server.ConnectionCluster[1].GetConnection()
-	connection.Scanner = protocol.NewRespScanner(bufio.NewReader(bytes.NewBufferString("+PONG\r\n")))
+	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
 	server.ConnectionCluster[1].RecycleRemoteConnection(connection)
 
 	connectionCount = server.countActiveConnections()
-	if connectionCount == 2 {
-		test.Log("Connection count is 2 as expected")
-	} else {
+	if connectionCount != 2 {
 		test.Fatal("Server's connection count is wrong: ", connectionCount, "instead of 2")
 	}
 }

@@ -15,10 +15,10 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/forcedotcom/rmux/protocol"
 	"net"
 	"testing"
 	"time"
+	"github.com/forcedotcom/rmux/writer"
 )
 
 func verifySelectDatabaseSuccess(test *testing.T, database int) {
@@ -27,28 +27,28 @@ func verifySelectDatabaseSuccess(test *testing.T, database int) {
 	if err != nil {
 		test.Fatal("Failed to listen on test socket ", testSocket)
 	}
-	defer func() {
-		listenSock.Close()
-	}()
+	defer listenSock.Close()
 	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+
 	//read buffer does't matter
 	readBuf := bufio.NewReader(bytes.NewBufferString("+OK\r\n"))
 	//write buffer will be used for verification
 	w := new(bytes.Buffer)
 	w.Reset()
-	testConnection.Scanner = protocol.NewRespScanner(readBuf)
-	err = testConnection.SelectDatabase(database)
+	testConnection.Reader = readBuf
+	testConnection.Writer = writer.NewFlexibleWriter(w)
 
-	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
-	if bytes.Equal(expectedWrite, w.Bytes()) {
-		test.Log("Select statement was properly written to output buffer")
-	} else {
-		test.Fatal("Select statement was not written to output buffer", w.Bytes(), expectedWrite)
+	// Do the select
+	if err := testConnection.SelectDatabase(database); err != nil {
+		test.Fatal("Error when selecting database: %s", err)
 	}
 
-	if err == nil {
-		test.Log("Database select did not fail")
-	} else {
+	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
+	if !bytes.Equal(expectedWrite, w.Bytes()) {
+		test.Fatalf("Select statement was not written to output buffer got:%q expected:%q", w.Bytes(), expectedWrite)
+	}
+
+	if err != nil {
 		test.Fatal("Database select failed")
 	}
 }
@@ -68,20 +68,17 @@ func verifySelectDatabaseError(test *testing.T, database int) {
 	//write buffer will be used for verification
 	w := new(bytes.Buffer)
 	w.Reset()
-	testConnection.Scanner = protocol.NewRespScanner(readBuf)
+	testConnection.Reader = readBuf
+	testConnection.Writer = writer.NewFlexibleWriter(w)
 	err = testConnection.SelectDatabase(database)
 
 	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
-	if bytes.Equal(expectedWrite, w.Bytes()) {
-		test.Log("Select statement was properly written to output buffer")
-	} else {
+	if !bytes.Equal(expectedWrite, w.Bytes()) {
 		test.Fatal("Select statement was not written to output buffer", w.Bytes(), expectedWrite)
 	}
 
 	if err == nil {
 		test.Fatal("Database select did not fail, even though bad response code was given")
-	} else {
-		test.Log("Database select failed")
 	}
 }
 
@@ -91,30 +88,24 @@ func verifySelectDatabaseTimeout(test *testing.T, database int) {
 	if err != nil {
 		test.Fatal("Failed to listen on test socket ", testSocket)
 	}
-	defer func() {
-		listenSock.Close()
-	}()
+	defer listenSock.Close()
+
 	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
 
 	//write buffer will be used for verification
 	w := new(bytes.Buffer)
 	w.Reset()
 	//Make a small buffer, just to confirm occasional flushes
-	buf := bufio.NewWriterSize(w, 38)
-	testConnection.Writer = buf
+	testConnection.Writer = writer.NewFlexibleWriter(w)
 	err = testConnection.SelectDatabase(database)
 
 	expectedWrite := []byte(fmt.Sprintf("select %d\r\n", database))
-	if bytes.Equal(expectedWrite, w.Bytes()) {
-		test.Log("Select statement was properly written to output buffer")
-	} else {
-		test.Fatal("Select statement was not written to output buffer", w.Bytes(), expectedWrite)
+	if !bytes.Equal(expectedWrite, w.Bytes()) {
+		test.Fatalf("Select statement was not written to output buffer Got(%q) Expected(%q)", w.Bytes(), expectedWrite)
 	}
 
 	if err == nil {
 		test.Fatal("Database select did not fail, even though there was no response")
-	} else {
-		test.Log("Database select timed out successfully")
 	}
 }
 
@@ -144,14 +135,10 @@ func TestNewUnixConnection(test *testing.T) {
 	connection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
 	if connection == nil {
 		test.Fatal("Connection initialization returned nil, binding to unix endpoint failed")
-	} else {
-		test.Log("Connection initialization success, binding to unix endpoint succeeded")
 	}
 
 	connection = NewConnection("unix", "/tmp/thisdoesnotexist", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
-	if connection == nil {
-		test.Log("Connection initialization returned nil, binding to fake unix endpoint failed")
-	} else {
+	if connection != nil {
 		test.Fatal("Connection initialization success, binding to fake unix endpoint succeeded????")
 	}
 }
@@ -160,7 +147,7 @@ func TestNewTcpConnection(test *testing.T) {
 	testEndpoint := "localhost:6379"
 	listenSock, err := net.Listen("tcp", testEndpoint)
 	if err != nil {
-		test.Log("Failed to listen on test socket ", testEndpoint, "maybe we're testing against a real readis connection")
+		test.Fatalf("Error listening on tcp sock %s. Error: %s", testEndpoint, err)
 	}
 	defer func() {
 		listenSock.Close()
@@ -168,15 +155,11 @@ func TestNewTcpConnection(test *testing.T) {
 	connection := NewConnection("tcp", testEndpoint, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
 	if connection == nil {
 		test.Fatal("Connection initialization returned nil, binding to tcp endpoint failed")
-	} else {
-		test.Log("Connection initialization success, binding to tcp endpoint succeeded")
 	}
 
 	//reserved sock should have nothing on it
 	connection = NewConnection("tcp", "localhost:49151", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
-	if connection == nil {
-		test.Log("Connection initialization returned nil, binding to fake tcp endpoint failed")
-	} else {
+	if connection != nil {
 		test.Fatal("Connection initialization success, binding to fake tcp endpoint succeeded????")
 	}
 }
@@ -191,40 +174,30 @@ func TestCheckConnection(test *testing.T) {
 		listenSock.Close()
 	}()
 
-	connection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	connection := NewConnection("unix", testSocket, 100*time.Millisecond, 100*time.Millisecond, 100*time.Millisecond)
+	if connection == nil {
+		test.Fatal("Connection initialization returned nil, binding to unix endpoint failed")
+	}
 
 	fd, err := listenSock.Accept()
 	if err != nil {
 		test.Fatal("Failed to accept connection")
-	} else {
-		localBuffer := bufio.NewReadWriter(bufio.NewReader(fd), bufio.NewWriter(fd))
-		test.Log("Shoving a +PONG response in the buffer for testing")
-		protocol.WriteLine(protocol.PONG_RESPONSE, localBuffer.Writer, true)
-		test.Log("Shoving a PONG response (no plus sign, so invalid) in the buffer for failure testing")
-		protocol.WriteLine([]byte{'P', 'O', 'N', 'G'}, localBuffer.Writer, true)
 	}
 
-	if connection == nil {
-		test.Fatal("Connection initialization returned nil, binding to unix endpoint failed")
-	} else {
-		test.Log("Connection initialization success, binding to unix endpoint succeeded")
+	// Buffering responses, one valid, one not
+	if _, err := fd.Write([]byte("+PONG\r\nPONG")); err != nil {
+		test.Fatalf("Failed to write to buffer: %s", err)
+	}
+
+	if !connection.CheckConnection() {
+		test.Fatal("Valid connection's check connection failed")
 	}
 
 	if connection.CheckConnection() {
-		test.Log("Valid connection's check connection succeeded")
-	} else {
-		test.Fatal("Valid connection's checkheck connection failed")
+		test.Fatal("Invalid connection's check connection succeeded")
 	}
 
 	if connection.CheckConnection() {
-		test.Fatal("Invalid connection's checkheck connection succeeded")
-	} else {
-		test.Log("Invalid connection's checkheck connection failed")
-	}
-
-	if connection.CheckConnection() {
-		test.Fatal("Timeing-out connection's checkheck connection succeeded")
-	} else {
-		test.Log("Timeing-out connection's checkheck connection failed")
+		test.Fatal("Timing-out connection's check connection succeeded")
 	}
 }
