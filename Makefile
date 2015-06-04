@@ -16,12 +16,12 @@ test-dev:
 test-integration:
 	$(REDISSERV) $(PWD)/example/redis.conf
 	$(GO) test -v -tags 'integration' ./...
-	kill -TERM $(cat /tmp/redis-test-instance-for-rmux.pid)
+	kill -TERM $$(cat /tmp/redis-test-instance-for-rmux.pid)
 
 test-integration-dev:
 	$(REDISSERV) $(PWD)/example/redis.conf
 	$(GO) test -v -tags 'integration dev' ./...
-	kill -TERM $(cat /tmp/redis-test-instance-for-rmux.pid)
+	kill -TERM $$(cat /tmp/redis-test-instance-for-rmux.pid)
 
 fmt:
 	$(GO) fmt ./...
