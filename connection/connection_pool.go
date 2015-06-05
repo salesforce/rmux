@@ -12,7 +12,7 @@
 package connection
 
 import (
-	"github.com/forcedotcom/rmux/protocol"
+	. "github.com/forcedotcom/rmux/log"
 	"time"
 )
 
@@ -90,7 +90,7 @@ func (myConnectionPool *ConnectionPool) CheckConnectionState() bool {
 		myConnectionPool.RecycleRemoteConnection(myConnection)
 		return true
 	} else {
-		protocol.Debug("The pool is down")
+		Debug("The pool is down")
 
 		myConnectionPool.IsConnected = false
 		for {

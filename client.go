@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/forcedotcom/rmux/connection"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	. "github.com/forcedotcom/rmux/writer"
 	"io"
@@ -135,23 +136,23 @@ func (this *Client) FlushRedisAndRespond() error {
 	defer connectionPool.RecycleRemoteConnection(redisConn)
 
 	if redisConn == nil {
-		protocol.Debug("Failed to retrieve an active connection from the provided connection pool")
+		Debug("Failed to retrieve an active connection from the provided connection pool")
 		this.ReadChannel <- readItem{nil, ERR_CONNECTION_DOWN}
 		return nil
 	}
 
 	if redisConn.DatabaseId != this.DatabaseId {
 		if err := redisConn.SelectDatabase(this.DatabaseId); err != nil {
-			protocol.Debug("Error while attempting to select database: %s", err)
+			Debug("Error while attempting to select database: %s", err)
 			return err
 		}
 	}
 
 	writeStart := time.Now()
 	numCommands := len(this.queued)
-	protocol.Debug("Writing %d commands to the redis server", numCommands)
+	Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
-		protocol.Debug("Command %q %q", command.GetCommand(), command.GetFirstArg())
+		Debug("Command %q %q", command.GetCommand(), command.GetFirstArg())
 		redisConn.Writer.Write(command.GetBuffer())
 	}
 	this.resetQueued()
@@ -162,7 +163,7 @@ func (this *Client) FlushRedisAndRespond() error {
 
 	copyStart := time.Now()
 	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
-		protocol.Debug("Error copying server responses: %s", err)
+		Debug("Error copying server responses: %s", err)
 		this.ReadChannel <- readItem{nil, err}
 		return err
 	}
@@ -170,7 +171,7 @@ func (this *Client) FlushRedisAndRespond() error {
 
 	this.Writer.Flush()
 
-	protocol.Debug("all %s getConn %s write %s copyResponse %s", time.Since(start), connEnd, writeEnd, copyEnd)
+	Debug("all %s getConn %s write %s copyResponse %s", time.Since(start), connEnd, writeEnd, copyEnd)
 
 	return nil
 }

@@ -14,6 +14,7 @@ package rmux
 import (
 	"fmt"
 	"github.com/forcedotcom/rmux/connection"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	"io"
 	"net"
@@ -104,7 +105,7 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 	newRedisMultiplexer.ClientReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.ClientWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.infoMutex = sync.RWMutex{}
-	protocol.Debug("Redis Multiplexer Initialized")
+	Debug("Redis Multiplexer Initialized")
 	return
 }
 
@@ -138,9 +139,9 @@ func (this *RedisMultiplexer) maintainConnectionStates() {
 	var m runtime.MemStats
 	for this.active {
 		this.activeConnectionCount = this.countActiveConnections()
-		// protocol.Debug("We have %d connections", this.connectionCount)
+		// Debug("We have %d connections", this.connectionCount)
 		runtime.ReadMemStats(&m)
-		// protocol.Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)", m.HeapInuse, m.HeapIdle, m.HeapReleased)
+		// Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)", m.HeapInuse, m.HeapIdle, m.HeapReleased)
 		this.generateMultiplexInfo()
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -167,10 +168,10 @@ func (this *RedisMultiplexer) Start() (err error) {
 	for this.active {
 		fd, err := this.Listener.Accept()
 		if err != nil {
-			protocol.Debug("Start: Error received from listener.Accept: %s", err.Error())
+			Debug("Start: Error received from listener.Accept: %s", err.Error())
 			continue
 		}
-		protocol.Debug("Accepted connection.")
+		Debug("Accepted connection.")
 
 		go this.initializeClient(fd)
 	}
@@ -190,14 +191,14 @@ func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			protocol.DebugPanic(r)
+			DebugPanic(r)
 			if val, ok := r.(string); ok {
 				// If we paniced, push that to the client before closing the connection
 				protocol.WriteError([]byte(val), myClient.Writer, true)
 			}
 		}
 
-		protocol.Debug("Closing client connection.")
+		Debug("Closing client connection.")
 		myClient.Connection.Close()
 	}()
 
@@ -220,7 +221,7 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	go client.ReadLoop(this)
 
 	defer func() {
-		protocol.Debug("Client command handling loop closing")
+		Debug("Client command handling loop closing")
 		// If the multiplexer goes down, deactivate this client.
 		client.Active = false
 	}()
@@ -266,13 +267,13 @@ ChunkLoop:
 }
 
 func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
-	protocol.Debug("Writing out %q", command)
+	Debug("Writing out %q", command)
 	immediateResponse, err := client.ParseCommand(command)
 
 	if immediateResponse != nil {
 		err = client.WriteLine(immediateResponse)
 		if err != nil {
-			protocol.Debug("Error received when writing an immediate response: %s", err)
+			Debug("Error received when writing an immediate response: %s", err)
 		}
 
 		return
@@ -305,7 +306,7 @@ func (this *RedisMultiplexer) HandleError(client *Client, err error) {
 	}
 
 	if err != io.EOF {
-		protocol.Debug("Error: %s", err)
+		Debug("Error: %s", err)
 	}
 
 	if err == ERR_QUIT {

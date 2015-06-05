@@ -13,6 +13,7 @@ package connection
 
 import (
 	"errors"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 )
 
@@ -37,10 +38,10 @@ func NewHashRing(connectionPools []*ConnectionPool) (newHashRing *HashRing, err 
 	if err != nil {
 		return
 	}
-	protocol.Debug("Making a hash ring for prime %v", prime)
+	Debug("Making a hash ring for prime %v", prime)
 	newHashRing.setBitMask(prime)
 	newHashRing.ConnectionPools = make([]*ConnectionPool, newHashRing.BitMask+1)
-	protocol.Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
+	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
 
 	newHashRing.distributeConnectionPools(prime, connectionPools)
 	return

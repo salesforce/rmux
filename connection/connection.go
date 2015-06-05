@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	. "github.com/forcedotcom/rmux/writer"
 	"net"
@@ -40,7 +41,7 @@ type Connection struct {
 func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) (newConnection *Connection) {
 	remoteConnection, err := net.DialTimeout(Protocol, Endpoint, ConnectTimeout)
 	if err != nil {
-		protocol.Debug("NewConnection: Error received from dial: %s", err)
+		Debug("NewConnection: Error received from dial: %s", err)
 		return nil
 	}
 	newConnection = &Connection{}
@@ -57,12 +58,12 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
 	if err != nil {
-		protocol.Debug("SelectDatabase: Error received from protocol.FlushLine: %s", err)
+		Debug("SelectDatabase: Error received from protocol.FlushLine: %s", err)
 		return err
 	}
 
 	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
-		protocol.Debug("Could not successfully select db: err:%s isPrefix:%t readLine:%q", err, isPrefix, line)
+		Debug("Could not successfully select db: err:%s isPrefix:%t readLine:%q", err, isPrefix, line)
 		err = errors.New("Invalid select response")
 		if this.connection != nil {
 			this.connection.Close()
@@ -79,13 +80,13 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 func (myConnection *Connection) CheckConnection() bool {
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
-		protocol.Debug("CheckConnection: Error received from FlushLine: %s", err)
+		Debug("CheckConnection: Error received from FlushLine: %s", err)
 		return false
 	}
 
 	line, isPrefix, err := myConnection.Reader.ReadLine()
 	if err != nil || isPrefix {
-		protocol.Debug("CheckConnection: Could not ping: %q isPrefix: %t", err, isPrefix)
+		Debug("CheckConnection: Could not ping: %q isPrefix: %t", err, isPrefix)
 	}
 
 	if err == nil && bytes.Equal(line, protocol.PONG_RESPONSE) {

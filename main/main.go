@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/forcedotcom/rmux"
+	. "github.com/forcedotcom/rmux/log"
 	"net"
 	"os"
 	"runtime"
@@ -44,6 +45,7 @@ var remoteWriteTimeout = flag.Duration("remoteWriteTimeout", 0, "Timeout to set 
 var remoteConnectTimeout = flag.Duration("remoteConnectTimeout", 0, "Timeout to set for remote redises (connect)")
 var cpuProfile = flag.String("cpuProfile", "", "Direct CPU Profile to target file")
 var configFile = flag.String("config", "", "Configuration file (JSON)")
+var doDebug = flag.Bool("debug", false, "Debug mode")
 
 func main() {
 	flag.Parse()
@@ -59,6 +61,12 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	if *doDebug {
+		SetLogLevel(LOG_DEBUG)
+	} else {
+		SetLogLevel(LOG_INFO)
+	}
+
 	if *configFile != "" {
 		configs, err = ReadConfigFromFile(*configFile)
 	} else {
@@ -69,7 +77,7 @@ func main() {
 	rmuxInstances, err := createInstances(configs)
 	terminateIfError(err, "Error creating rmux instances: %s\r\n")
 
-	fmt.Printf("Starting %d rmux instances\r\n", len(rmuxInstances))
+	Info("Starting %d rmux instances", len(rmuxInstances))
 
 	start(rmuxInstances)
 }
@@ -134,20 +142,20 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 		var err error
 
 		if config.MaxProcesses > 0 {
-			fmt.Printf("Max processes increased to: %d from: %d\r\n", config.MaxProcesses, runtime.GOMAXPROCS(config.MaxProcesses))
+			Info("Max processes increased to: %d from: %d", config.MaxProcesses, runtime.GOMAXPROCS(config.MaxProcesses))
 		}
 
 		if config.PoolSize < 1 {
-			fmt.Printf("Pool size must be positive - defaulting to %d\r\n", DEFAULT_POOL_SIZE)
+			Info("Pool size must be positive - defaulting to %d", DEFAULT_POOL_SIZE)
 			config.PoolSize = DEFAULT_POOL_SIZE
 		}
 
 		if config.Socket != "" {
 			syscall.Umask(0111)
-			fmt.Printf("Initializing rmux server on socket %s\r\n", config.Socket)
+			Info("Initializing rmux server on socket %s", config.Socket)
 			rmuxInstance, err = rmux.NewRedisMultiplexer("unix", config.Socket, config.PoolSize)
 		} else {
-			fmt.Printf("Initializing rmux server on host: %s and port: %d\r\n", config.Host, config.Port)
+			Info("Initializing rmux server on host: %s and port: %d", config.Host, config.Port)
 			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, strconv.Itoa(config.Port)), config.PoolSize)
 		}
 
@@ -160,14 +168,14 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 
 		if len(config.TcpConnections) > 0 {
 			for _, tcpConnection := range config.TcpConnections {
-				fmt.Printf("Adding tcp (destination) connection: %s\r\n", tcpConnection)
+				Info("Adding tcp (destination) connection: %s", tcpConnection)
 				rmuxInstance.AddConnection("tcp", tcpConnection)
 			}
 		}
 
 		if len(config.UnixConnections) > 0 {
 			for _, unixConnection := range config.UnixConnections {
-				fmt.Printf("Adding unix (destination) connection: %s\r\n", unixConnection)
+				Info("Adding unix (destination) connection: %s", unixConnection)
 				rmuxInstance.AddConnection("unix", unixConnection)
 			}
 		}
@@ -180,39 +188,39 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 		if config.LocalTimeout != 0 {
 			rmuxInstance.ClientReadTimeout = config.LocalTimeout
 			rmuxInstance.ClientWriteTimeout = config.LocalTimeout
-			fmt.Printf("Setting local client read and write timeouts to: %s\r\n", config.LocalTimeout)
+			Info("Setting local client read and write timeouts to: %s", config.LocalTimeout)
 		}
 
 		if config.LocalReadTimeout != 0 {
 			rmuxInstance.ClientReadTimeout = config.LocalReadTimeout
-			fmt.Printf("Setting local client read timeout to: %s\r\n", config.LocalReadTimeout)
+			Info("Setting local client read timeout to: %s", config.LocalReadTimeout)
 		}
 
 		if config.LocalWriteTimeout != 0 {
 			rmuxInstance.ClientWriteTimeout = config.LocalWriteTimeout
-			fmt.Printf("Setting local client write timeout to: %s\r\n", config.LocalWriteTimeout)
+			Info("Setting local client write timeout to: %s", config.LocalWriteTimeout)
 		}
 
 		if config.RemoteTimeout != 0 {
 			rmuxInstance.EndpointConnectTimeout = config.RemoteTimeout
 			rmuxInstance.EndpointReadTimeout = config.RemoteTimeout
 			rmuxInstance.EndpointWriteTimeout = config.RemoteTimeout
-			fmt.Printf("Setting remote redis connect, read, and write timeouts to: %s\r\n", config.RemoteTimeout)
+			Info("Setting remote redis connect, read, and write timeouts to: %s", config.RemoteTimeout)
 		}
 
 		if config.RemoteConnectTimeout != 0 {
 			rmuxInstance.EndpointConnectTimeout = config.RemoteConnectTimeout
-			fmt.Printf("Setting remote redis connect timeout to: %s\r\n", config.RemoteConnectTimeout)
+			Info("Setting remote redis connect timeout to: %s", config.RemoteConnectTimeout)
 		}
 
 		if config.RemoteReadTimeout != 0 {
 			rmuxInstance.EndpointReadTimeout = config.RemoteReadTimeout
-			fmt.Printf("Setting remote redis read timeouts to: %s\r\n", config.RemoteReadTimeout)
+			Info("Setting remote redis read timeouts to: %s", config.RemoteReadTimeout)
 		}
 
 		if config.RemoteWriteTimeout != 0 {
 			rmuxInstance.EndpointWriteTimeout = config.RemoteWriteTimeout
-			fmt.Printf("Setting remote redis write timeout to: %s\r\n", config.RemoteWriteTimeout)
+			Info("Setting remote redis write timeout to: %s", config.RemoteWriteTimeout)
 		}
 	}
 
