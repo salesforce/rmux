@@ -120,13 +120,11 @@ func configureFromArgs() ([]PoolConfig, error) {
 	return config, nil
 }
 
-func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
-	rmuxInstances := make([]*rmux.RedisMultiplexer, len(configs))
+func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplexer, err error) {
+	rmuxInstances = make([]*rmux.RedisMultiplexer, len(configs))
 
-	// If we're exiting out because of a misconfiguration, set this flag and we will clean up any instances
-	isErrorCondition := false
 	defer func() {
-		if isErrorCondition {
+		if err != nil {
 			for _, instance := range rmuxInstances {
 				if instance == nil {
 					continue
@@ -134,12 +132,13 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 
 				instance.Listener.Close()
 			}
+
+			rmuxInstances = nil
 		}
 	}()
 
 	for i, config := range configs {
 		var rmuxInstance *rmux.RedisMultiplexer
-		var err error
 
 		if config.MaxProcesses > 0 {
 			Info("Max processes increased to: %d from: %d", config.MaxProcesses, runtime.GOMAXPROCS(config.MaxProcesses))
@@ -162,8 +161,7 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 		rmuxInstances[i] = rmuxInstance
 
 		if err != nil {
-			isErrorCondition = true
-			return nil, err
+			return
 		}
 
 		if len(config.TcpConnections) > 0 {
@@ -181,8 +179,8 @@ func createInstances(configs []PoolConfig) ([]*rmux.RedisMultiplexer, error) {
 		}
 
 		if rmuxInstance.PrimaryConnectionPool == nil {
-			isErrorCondition = true
-			return nil, errors.New("You must have at least one connection defined")
+			err = errors.New("You must have at least one connection defined")
+			return
 		}
 
 		if config.LocalTimeout != 0 {
@@ -259,7 +257,7 @@ func terminateIfError(err error, format string, a ...interface{}) {
 	if err != nil {
 		allArgs := append([]interface{}{err}, a...)
 
-		fmt.Fprintf(os.Stderr, format, allArgs...)
+		Error(format, allArgs...)
 		os.Exit(1)
 	}
 }
