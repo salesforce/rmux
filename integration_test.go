@@ -20,7 +20,7 @@ var (
 	rmuxSock  string = "/tmp/rmux-test.sock"
 )
 
-func StartRmux(t *testing.T) (r *tRmux) {
+func StartRmux(t *testing.T, servers int) (r *tRmux) {
 	r = &tRmux{}
 	r.t = t
 
@@ -32,7 +32,9 @@ func StartRmux(t *testing.T) (r *tRmux) {
 
 	r.s = rs
 
-	r.s.AddConnection("unix", redisSock)
+	for i := 0; i < servers; i++ {
+		r.s.AddConnection("unix", redisSock)
+	}
 
 	for _, conn := range r.s.ConnectionCluster {
 		if !conn.CheckConnectionState() {
@@ -59,7 +61,7 @@ func TestStartRmux(t *testing.T) {
 func checkResponse(t *testing.T, in string, expected string) {
 	var err error
 
-	r := StartRmux(t)
+	r := StartRmux(t, 1)
 	defer r.Cleanup()
 
 	sock, err := net.Dial("unix", rmuxSock)
@@ -91,8 +93,68 @@ func checkResponse(t *testing.T, in string, expected string) {
 	}
 }
 
+func checkMuxResponse(t *testing.T, in string, expected string) {
+	var err error
+
+	r := StartRmux(t, 2)
+	defer r.Cleanup()
+
+	sock, err := net.Dial("unix", rmuxSock)
+	if err != nil {
+		t.Fatalf("Error dialing rmux socket: %s", err)
+	}
+	defer sock.Close()
+
+	_, err = sock.Write([]byte(in))
+	if err != nil {
+		t.Fatalf("Error writing command: %s", err)
+	}
+
+	buf := make([]byte, 8*1024)
+	b := new(bytes.Buffer)
+	sock.SetDeadline(time.Now().Add(1000 * time.Millisecond))
+	for read := 0; read < len(expected); {
+		n, err := sock.Read(buf)
+		if err != nil {
+			t.Fatalf("Error reading from sock: %s", err)
+		}
+
+		b.Write(buf[:n])
+		read += int(n)
+	}
+
+	if read := b.Next(len(expected)); bytes.Compare(read, []byte(expected)) != 0 {
+		t.Errorf("Did not read the expected response of length 66560.\r\nGot %q\r\n", read)
+	}
+}
+
+// given a simple command, construct a multi-bulk command
+func makeCommand(str string) string {
+	splits := strings.Split(str, " ")
+
+	cmd := "*" + string(len(splits)) + "\r\n"
+
+	for _, s := range splits {
+		cmd = cmd + "$" + string(len(s)) + "\r\n"
+	}
+
+	return cmd
+}
+
 func TestLargeResponse(t *testing.T) {
 	cmd := "*3\r\n$4\r\nEVAL\r\n$47\r\nreturn cjson.encode(string.rep('a', 65 * 1024))\r\n$1\r\n0\r\n"
 	expected := "$66562\r\n\"" + strings.Repeat("a", 66560) + "\"\r\n"
 	checkResponse(t, cmd, expected)
+}
+
+func TestPipelineResponse(t *testing.T) {
+	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("get key1")
+	expected := "$-1\r\n:1\r\n$4\r\ntest\r\n"
+	checkResponse(t, cmd, expected)
+}
+
+func TestMuxPipelineResponse(t *testing.T) {
+	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("get key1")
+	expected := "$-1\r\n:1\r\n$4\r\ntest\r\n"
+	checkMuxResponse(t, cmd, expected)
 }
