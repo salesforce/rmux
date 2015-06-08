@@ -21,62 +21,69 @@ import (
 	"time"
 )
 
-//func TestReadCommand(t *testing.T) {
-//	testData := []struct {
-//		input    string
-//		command  string
-//		argCount int
-//		arg1     string
-//	}{
-//		{"ping\r\n", "ping", 0, ""},
-//		{"PING\r\n", "ping", 0, ""},
-//		{"+ping\r\n", "ping", 0, ""},
-//		{"select 1\r\n", "select", 1, "1"},
-//		{"*1\r\n$4\r\nping\r\n", "ping", 0, ""},
-//		{"*2\r\n$6\r\nselect\r\n$1\r\n1\r\n", "select", 1, "1"},
-//		{"*2\r\n$6\r\nselect\r\n$1\r\na\r\n", "select", 1, "a"},
-//		{"*5\r\n$3\r\nDEL\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n", "del", 4, "key1"},
-//	}
-//
-//	listenSock, err := net.Listen("unix", "/tmp/rmuxTest1.sock")
-//	if err != nil {
-//		t.Fatal("Cannot listen on /tmp/rmuxTest1.sock: ", err)
-//	}
-//	defer listenSock.Close()
-//	testConnection, err := net.DialTimeout("unix", "/tmp/rmuxTest1.sock", 1*time.Second)
-//	if err != nil {
-//		t.Fatal("Could not dial in to our local rmux sock")
-//	}
-//	defer testConnection.Close()
-//	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
-//
-//	for _, data := range testData {
-//		// TODO
-////		input := []byte(data.input)
-////
-////		client.ReadWriter.Writer = bufio.NewWriterSize(bytes.NewBuffer([]byte("")), 38)
-////		client.ReadWriter.Reader = bufio.NewReader(bytes.NewBuffer(input))
-////
-////		command, err := protocol.ReadCommand(client.Reader)
-////
-////		if err != nil {
-////			t.Errorf("Error when reading input %q: %s", data.input, err)
-////			continue
-////		}
-////
-////		if bytes.Compare(command.GetCommand(), []byte(data.command)) != 0 {
-////			t.Errorf("Should have parsed command %q, got %q", data.command, command.GetCommand())
-////		}
-////
-////		if command.GetArgCount() != data.argCount {
-////			t.Errorf("%q should have parsed into %d argument(s), got %d", data.input, data.argCount, command.GetArgCount())
-////		}
-////
-////		if bytes.Compare(command.GetFirstArg(), []byte(data.arg1)) != 0 {
-////			t.Errorf("Should have first arg %q, got %q", data.arg1, command.GetFirstArg())
-////		}
-//	}
-//}
+func TestReadCommand(t *testing.T) {
+	testData := []struct {
+		input    string
+		command  string
+		argCount int
+		arg1     string
+	}{
+		{"ping\r\n", "ping", 0, ""},
+		{"PING\r\n", "ping", 0, ""},
+		{"+ping\r\n", "ping", 0, ""},
+		{"select 1\r\n", "select", 1, "1"},
+		{"*1\r\n$4\r\nping\r\n", "ping", 0, ""},
+		{"*2\r\n$6\r\nselect\r\n$1\r\n1\r\n", "select", 1, "1"},
+		{"*2\r\n$6\r\nselect\r\n$1\r\na\r\n", "select", 1, "a"},
+		{"*5\r\n$3\r\nDEL\r\n$4\r\nkey1\r\n$4\r\nkey2\r\n$4\r\nkey3\r\n$4\r\nkey4\r\n", "del", 4, "key1"},
+	}
+
+	listenSock, err := net.Listen("unix", "/tmp/rmuxTest1.sock")
+	if err != nil {
+		t.Fatal("Cannot listen on /tmp/rmuxTest1.sock: ", err)
+	}
+	defer listenSock.Close()
+	testConnection, err := net.DialTimeout("unix", "/tmp/rmuxTest1.sock", 1*time.Second)
+	if err != nil {
+		t.Fatal("Could not dial in to our local rmux sock")
+	}
+	defer testConnection.Close()
+	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
+
+	for _, data := range testData {
+		input := bytes.NewBuffer([]byte(data.input))
+
+
+		client.Writer = writer.NewFlexibleWriter(new(bytes.Buffer))
+		client.Scanner = protocol.NewRespScanner(input)
+
+		commandScanned := client.Scanner.Scan()
+		if commandScanned == false {
+			t.Errorf("Error when scanning command from %q: %s", data.input, client.Scanner.Err())
+			continue
+		}
+
+		commandBytes := client.Scanner.Bytes()
+
+		command, err := protocol.ParseCommand(commandBytes)
+		if err != nil {
+			t.Errorf("Error when parsing command from %q: %s", data.input, err)
+			continue
+		}
+
+		if bytes.Compare(command.GetCommand(), []byte(data.command)) != 0 {
+			t.Errorf("Should have parsed command %q, got %q", data.command, command.GetCommand())
+		}
+
+		if command.GetArgCount() != data.argCount {
+			t.Errorf("%q should have parsed into %d argument(s), got %d", data.input, data.argCount, command.GetArgCount())
+		}
+
+		if bytes.Compare(command.GetFirstArg(), []byte(data.arg1)) != 0 {
+			t.Errorf("Should have first arg %q, got %q", data.arg1, command.GetFirstArg())
+		}
+	}
+}
 
 func TestParseCommand(test *testing.T) {
 	testCases := []struct {
