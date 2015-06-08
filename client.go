@@ -118,7 +118,7 @@ func (this *Client) FlushRedisAndRespond() error {
 		return nil
 	}
 
-	start := time.Now()
+//	start := time.Now()
 
 	var connectionPool *connection.ConnectionPool
 	if !this.Multiplexing {
@@ -130,48 +130,48 @@ func (this *Client) FlushRedisAndRespond() error {
 		connectionPool = this.HashRing.GetConnectionPool(this.queued[0])
 	}
 
-	connStart := time.Now()
+//	connStart := time.Now()
 	redisConn := connectionPool.GetConnection()
-	connEnd := time.Since(connStart)
+//	connEnd := time.Since(connStart)
 	defer connectionPool.RecycleRemoteConnection(redisConn)
 
 	if redisConn == nil {
-		Debug("Failed to retrieve an active connection from the provided connection pool")
+		Error("Failed to retrieve an active connection from the provided connection pool")
 		this.ReadChannel <- readItem{nil, ERR_CONNECTION_DOWN}
 		return nil
 	}
 
 	if redisConn.DatabaseId != this.DatabaseId {
 		if err := redisConn.SelectDatabase(this.DatabaseId); err != nil {
-			Debug("Error while attempting to select database: %s", err)
+//			Debug("Error while attempting to select database: %s", err)
 			return err
 		}
 	}
 
-	writeStart := time.Now()
+//	writeStart := time.Now()
 	numCommands := len(this.queued)
-	Debug("Writing %d commands to the redis server", numCommands)
+//	Debug("Writing %d commands to the redis server", numCommands)
 	for _, command := range this.queued {
-		Debug("Command %q %q", command.GetCommand(), command.GetFirstArg())
+//		Debug("Command %q %q", command.GetCommand(), command.GetFirstArg())
 		redisConn.Writer.Write(command.GetBuffer())
 	}
 	this.resetQueued()
 	for redisConn.Writer.Buffered() > 0 {
 		redisConn.Writer.Flush()
 	}
-	writeEnd := time.Since(writeStart)
+//	writeEnd := time.Since(writeStart)
 
-	copyStart := time.Now()
+//	copyStart := time.Now()
 	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
-		Debug("Error copying server responses: %s", err)
+//		Debug("Error copying server responses: %s", err)
 		this.ReadChannel <- readItem{nil, err}
 		return err
 	}
-	copyEnd := time.Since(copyStart)
+//	copyEnd := time.Since(copyStart)
 
 	this.Writer.Flush()
 
-	Debug("all %s getConn %s write %s copyResponse %s", time.Since(start), connEnd, writeEnd, copyEnd)
+//	Debug("all %s getConn %s write %s copyResponse %s", time.Since(start), connEnd, writeEnd, copyEnd)
 
 	return nil
 }

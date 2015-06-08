@@ -3,7 +3,7 @@ package protocol
 import (
 	"bufio"
 	"bytes"
-	. "github.com/forcedotcom/rmux/log"
+//	. "github.com/forcedotcom/rmux/log"
 	"io"
 )
 
@@ -16,7 +16,7 @@ func NewRespScanner(r io.Reader) *bufio.Scanner {
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	//	if len(data) > 0 {
-	//		Debug("Scanning %q", data)
+//	//		Debug("Scanning %q", data)
 	//	}
 
 	if atEOF && len(data) == 0 {
@@ -47,9 +47,9 @@ func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	}
 
 	//	if err != nil {
-	//		Debug("Scanned an error %s", err)
+//	//		Debug("Scanned an error %s", err)
 	//	} else {
-	//		Debug("Scanned a chunk %d %q", advance, token)
+//	//		Debug("Scanned a chunk %d %q", advance, token)
 	//	}
 
 	return
@@ -194,7 +194,7 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return advance, nil, err
 	} else if advance == 0 || token == nil || len(token) < 3 {
 		if len(token) < 3 && len(token) > 0 {
-			Debug("Hm. %q", token)
+//			Debug("Hm. %q", token)
 		}
 		// Asking for more data
 		return 0, nil, nil

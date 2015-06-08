@@ -61,7 +61,7 @@ func Error(format string, a ...interface{}) {
 	}
 }
 
-func DebugPanic(r interface{}) {
+func LogPanic(r interface{}) {
 	Error("Panic: %s\r\nStack: %s\r\n", r, debug.Stack())
 }
 

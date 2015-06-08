@@ -14,7 +14,7 @@ package protocol
 import (
 	"bufio"
 	"bytes"
-	. "github.com/forcedotcom/rmux/log"
+//	. "github.com/forcedotcom/rmux/log"
 	. "github.com/forcedotcom/rmux/writer"
 )
 
@@ -298,7 +298,7 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 //Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
 func ParseInt(response []byte) (value int, err error) {
 	if len(response) == 0 {
-		Debug("ParseInt: Zero-length int")
+//		Debug("ParseInt: Zero-length int")
 		err = ERROR_INVALID_INT
 		return
 	}
@@ -316,7 +316,7 @@ func ParseInt(response []byte) (value int, err error) {
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
 		if b > 9 {
-			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
+//			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
 			err = ERROR_INVALID_INT
 			return
 		}
@@ -362,13 +362,13 @@ func ParseCommand(b []byte) (command Command, err error) {
 func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
 	_, err = dest.Write([]byte("-ERR "))
 	if err != nil {
-		Debug("WriteError: Error received from write: %s", err)
+//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
 	err = WriteLine(line, dest, flush)
 	if err != nil {
-		Debug("WriteError: Error received from write: %s", err)
+//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
@@ -385,13 +385,13 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 	// startTime := time.Now()
 	_, err = destination.Write(line)
 	if err != nil {
-		Debug("writeLine: Error received from write: %s", err)
+//		Debug("writeLine: Error received from write: %s", err)
 		return
 	}
 
 	_, err = destination.Write(REDIS_NEWLINE)
 	if err != nil {
-		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
+//		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
 		return
 	}
 
@@ -410,10 +410,10 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 
 ScanLoop:
 	for numRead := 0; numRead < numResponses; {
-		Debug("Attempting to write into the buffer...")
+//		Debug("Attempting to write into the buffer...")
 		n, err := reader.Read(b)
 		if err != nil {
-			Debug("Got error while reading from redis: %s", err)
+//			Debug("Got error while reading from redis: %s", err)
 			return err
 		}
 		buf.Write(b[:n])
@@ -421,7 +421,7 @@ ScanLoop:
 		for {
 			n, token, err := ScanResp(buf.Bytes(), false)
 			if err != nil {
-				Debug("Got error while scanning resp: %s", err)
+//				Debug("Got error while scanning resp: %s", err)
 				return err
 			}
 
@@ -430,7 +430,7 @@ ScanLoop:
 			}
 
 			toWrite := buf.Next(n)
-			Debug("Writing to client: %q", toWrite)
+//			Debug("Writing to client: %q", toWrite)
 			localBuffer.Write(toWrite)
 
 			numRead++
@@ -438,7 +438,7 @@ ScanLoop:
 	}
 
 	if err != nil {
-		Debug("Error %s", err)
+//		Debug("Error %s", err)
 		return err
 	}
 
