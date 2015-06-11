@@ -30,7 +30,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-//	. "github.com/forcedotcom/rmux/log"
+	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	. "github.com/forcedotcom/rmux/writer"
 	"net"
@@ -55,7 +55,7 @@ type Connection struct {
 func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) (newConnection *Connection) {
 	remoteConnection, err := net.DialTimeout(Protocol, Endpoint, ConnectTimeout)
 	if err != nil {
-//		Debug("NewConnection: Error received from dial: %s", err)
+		Debug("NewConnection: Error received from dial: %s", err)
 		return nil
 	}
 	newConnection = &Connection{}

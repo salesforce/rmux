@@ -28,6 +28,9 @@ package connection
 import (
 //	. "github.com/forcedotcom/rmux/log"
 	"time"
+	"sync/atomic"
+	"github.com/forcedotcom/rmux/graphite"
+	"strings"
 )
 
 const (
@@ -55,6 +58,8 @@ type ConnectionPool struct {
 	WriteTimeout time.Duration
 	//channel of recycled connections, for re-use
 	connectionPool chan *Connection
+	// Number of active connections
+	Count int32
 }
 
 //Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
@@ -67,6 +72,7 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int) (newConnecti
 	newConnectionPool.ConnectTimeout = EXTERN_CONNECT_TIMEOUT
 	newConnectionPool.ReadTimeout = EXTERN_READ_TIMEOUT
 	newConnectionPool.WriteTimeout = EXTERN_WRITE_TIMEOUT
+	newConnectionPool.Count = 0
 	return
 }
 
@@ -78,6 +84,9 @@ func (myConnectionPool *ConnectionPool) GetConnection() (myConnection *Connectio
 		return
 	default:
 		myConnection = NewConnection(myConnectionPool.Protocol, myConnectionPool.Endpoint, myConnectionPool.ConnectTimeout, myConnectionPool.ReadTimeout, myConnectionPool.WriteTimeout)
+		if myConnection != nil {
+			atomic.AddInt32(&myConnectionPool.Count, 1)
+		}
 		return
 	}
 }
@@ -85,11 +94,21 @@ func (myConnectionPool *ConnectionPool) GetConnection() (myConnection *Connectio
 //Recycles a connection back into our connection pool
 //If the pool is full, throws it away
 func (myConnectionPool *ConnectionPool) RecycleRemoteConnection(remoteConnection *Connection) {
+	// TODO: Check if connection is valid
 	select {
 	case myConnectionPool.connectionPool <- remoteConnection:
+		// Nothing to do, the connection was recycled
+		return
 	default:
+		// Close the connection instead of waiting for garbage collection
+		if remoteConnection != nil {
+			atomic.AddInt32(&myConnectionPool.Count, -1)
+			if remoteConnection.connection != nil {
+				remoteConnection.connection.Close()
+			}
+		}
+		return
 	}
-	return
 }
 
 //Checks the state of connections in this connection pool
@@ -118,4 +137,11 @@ func (myConnectionPool *ConnectionPool) CheckConnectionState() bool {
 		}
 		return false
 	}
+}
+
+func (cp *ConnectionPool) ReportGraphite() {
+	endpoint := strings.Replace(cp.Endpoint, ".", "-", -1)
+	endpoint = strings.Replace(cp.Endpoint, ":", "-", -1)
+
+	graphite.Gauge("pools." + endpoint, int(cp.Count))
 }

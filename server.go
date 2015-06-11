@@ -28,6 +28,7 @@ package rmux
 import (
 	"fmt"
 	"github.com/forcedotcom/rmux/connection"
+	"github.com/forcedotcom/rmux/graphite"
 //	. "github.com/forcedotcom/rmux/log"
 	"github.com/forcedotcom/rmux/protocol"
 	"io"
@@ -71,7 +72,8 @@ type RedisMultiplexer struct {
 	ClientReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	ClientWriteTimeout time.Duration
-
+	// The graphite statsd server to ping with metrics
+	GraphiteServer *string
 	//Whether or not the multiplexer is active.  Used to determine when a tear-down should be occuring
 	active bool
 	//The amount of active (outbound) connections that we have
@@ -80,8 +82,10 @@ type RedisMultiplexer struct {
 	connectionCount int32
 	//whether or not we are multiplexing
 	multiplexing bool
+	// Cached 'info' command response for multiplexing servers
 	infoResponse []byte
-	infoMutex    sync.RWMutex
+	// Read/Write mutex for above infoResponse slice
+	infoMutex sync.RWMutex
 }
 
 //Sub-task that handles the cleanup when a server goes down
@@ -178,6 +182,9 @@ func (this *RedisMultiplexer) Start() (err error) {
 
 	go this.maintainConnectionStates()
 	go this.initializeCleanup()
+	if graphite.Enabled() {
+		go this.GraphiteCheckin()
+	}
 
 	for this.active {
 		fd, err := this.Listener.Accept()
@@ -186,6 +193,7 @@ func (this *RedisMultiplexer) Start() (err error) {
 			continue
 		}
 //		Debug("Accepted connection.")
+		graphite.Increment("accepted")
 
 		go this.initializeClient(fd)
 	}
@@ -225,6 +233,15 @@ func (this *RedisMultiplexer) sendMultiplexInfo(myClient *Client) (err error) {
 	err = protocol.WriteLine(this.infoResponse, myClient.Writer, true)
 	this.infoMutex.RUnlock()
 	return
+}
+
+func (this *RedisMultiplexer) GraphiteCheckin() {
+	for this.active {
+		time.Sleep(time.Millisecond * 100)
+		for _, pool := range this.ConnectionCluster {
+			pool.ReportGraphite()
+		}
+	}
 }
 
 //Handles requests for a client.

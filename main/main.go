@@ -39,6 +39,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"github.com/forcedotcom/rmux/graphite"
 )
 
 const DEFAULT_POOL_SIZE = 20
@@ -60,6 +61,7 @@ var remoteConnectTimeout = flag.Duration("remoteConnectTimeout", 0, "Timeout to 
 var cpuProfile = flag.String("cpuProfile", "", "Direct CPU Profile to target file")
 var configFile = flag.String("config", "", "Configuration file (JSON)")
 var doDebug = flag.Bool("debug", false, "Debug mode")
+var graphiteServer = flag.String("graphite", "", "Graphite statsd endpoint")
 
 func main() {
 	flag.Parse()
@@ -79,6 +81,13 @@ func main() {
 		SetLogLevel(LOG_DEBUG)
 	} else {
 		SetLogLevel(LOG_INFO)
+	}
+
+	if *graphiteServer != "" {
+		err := graphite.SetEndpoint(*graphiteServer)
+		if err != nil {
+			Error("Error when setting graphite endpoint: %s", err)
+		}
 	}
 
 	if *configFile != "" {

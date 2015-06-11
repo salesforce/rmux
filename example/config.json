@@ -2,16 +2,8 @@
 	{
 		"socket": "/tmp/rmux-job-1-master.sock",
 		"tcpConnections": [ "localhost:6379" ],
-		"localTimeout": 500
-	},
-	{
-		"socket": "/tmp/rmux-job-1-slave.sock",
-		"tcpConnections": [ "localhost:6379" ],
-		"localTimeout": 500
-	},
-	{
-		"socket": "/tmp/rmux-local.sock",
-		"tcpConnections": [ "localhost:6379" ],
-		"localTimeout": 500
+		"localTimeout": 500,
+	  	"remoteTimeout": 500,
+	  	"connectTimeout": 500
 	}
 ]
