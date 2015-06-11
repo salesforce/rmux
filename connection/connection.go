@@ -48,22 +48,42 @@ type Connection struct {
 	//The connection wrapper for our net connection
 	//	ConnectionReadWriter *protocol.TimedNetReadWriter
 	Reader *bufio.Reader
+
+	protocol string
+	endpoint string
+	connectTimeout time.Duration
+	readTimeout time.Duration
+	writeTimeout time.Duration
 }
 
 //Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
 //ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
-func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) (newConnection *Connection) {
-	remoteConnection, err := net.DialTimeout(Protocol, Endpoint, ConnectTimeout)
+func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) *Connection {
+	c := &Connection{}
+	c.protocol = Protocol
+	c.endpoint = Endpoint
+	c.connectTimeout = ConnectTimeout
+	c.readTimeout = ReadTimeout
+	c.writeTimeout = WriteTimeout
+	return c
+}
+
+func (c *Connection) ReconnectIfNecessary() {
+	if c.connection != nil {
+		return
+	}
+
+	var err error
+	c.connection, err = net.DialTimeout(c.protocol, c.endpoint, c.connectTimeout)
 	if err != nil {
 		Debug("NewConnection: Error received from dial: %s", err)
-		return nil
+		return
 	}
-	newConnection = &Connection{}
-	netReadWriter := protocol.NewTimedNetReadWriter(remoteConnection, ReadTimeout, WriteTimeout)
-	newConnection.Writer = NewFlexibleWriter(netReadWriter)
-	newConnection.DatabaseId = 0
-	newConnection.Reader = bufio.NewReader(netReadWriter)
-	return
+
+	netReadWriter := protocol.NewTimedNetReadWriter(c.connection, c.readTimeout, c.writeTimeout)
+	c.Writer = NewFlexibleWriter(netReadWriter)
+	c.DatabaseId = 0
+	c.Reader = bufio.NewReader(netReadWriter)
 }
 
 //Selects the given database, for the connection

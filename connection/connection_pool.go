@@ -73,42 +73,37 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int) (newConnecti
 	newConnectionPool.ReadTimeout = EXTERN_READ_TIMEOUT
 	newConnectionPool.WriteTimeout = EXTERN_WRITE_TIMEOUT
 	newConnectionPool.Count = 0
+
+	// Fill the pool with as many handlers as it asks for
+	for i := 0; i < poolCapacity; i++ {
+		newConnectionPool.connectionPool <- NewConnection(
+			newConnectionPool.Protocol,
+			newConnectionPool.Endpoint,
+			newConnectionPool.ConnectTimeout,
+			newConnectionPool.ReadTimeout,
+			newConnectionPool.WriteTimeout,
+		)
+	}
+
 	return
 }
 
 //Gets a connection from the connection pool
-//If a connection is not ready, snags a new one
 func (myConnectionPool *ConnectionPool) GetConnection() (myConnection *Connection) {
 	select {
 	case myConnection = <-myConnectionPool.connectionPool:
+		atomic.AddInt32(&myConnectionPool.Count, 1)
+		myConnection.ReconnectIfNecessary()
 		return
-	default:
-		myConnection = NewConnection(myConnectionPool.Protocol, myConnectionPool.Endpoint, myConnectionPool.ConnectTimeout, myConnectionPool.ReadTimeout, myConnectionPool.WriteTimeout)
-		if myConnection != nil {
-			atomic.AddInt32(&myConnectionPool.Count, 1)
-		}
-		return
+	// TODO: Maybe a while/timeout/graphiteping loop?
 	}
 }
 
 //Recycles a connection back into our connection pool
 //If the pool is full, throws it away
 func (myConnectionPool *ConnectionPool) RecycleRemoteConnection(remoteConnection *Connection) {
-	// TODO: Check if connection is valid
-	select {
-	case myConnectionPool.connectionPool <- remoteConnection:
-		// Nothing to do, the connection was recycled
-		return
-	default:
-		// Close the connection instead of waiting for garbage collection
-		if remoteConnection != nil {
-			atomic.AddInt32(&myConnectionPool.Count, -1)
-			if remoteConnection.connection != nil {
-				remoteConnection.connection.Close()
-			}
-		}
-		return
-	}
+	myConnectionPool.connectionPool <- remoteConnection
+	atomic.AddInt32(&myConnectionPool.Count, -1)
 }
 
 //Checks the state of connections in this connection pool
