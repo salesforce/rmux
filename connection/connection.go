@@ -71,14 +71,13 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 func (c *Connection) Disconnect() {
 	if c.connection != nil {
 		c.connection.Close()
+		Info("Disconnected a connection")
+		graphite.Increment("disconnect")
 	}
 	c.connection = nil
 	c.DatabaseId = 0
 	c.Reader = nil
 	c.Writer = nil
-
-	Info("Disconnected a connection")
-	graphite.Increment("disconnect")
 }
 
 func (c *Connection) ReconnectIfNecessary() error {
@@ -134,19 +133,33 @@ func (myConnection *Connection) CheckConnection() bool {
 		return false
 	}
 
+	start := time.Now()
+	defer func() {
+		graphite.Timing("check_connection", time.Now().Sub(start))
+	}()
+
+	startWrite := time.Now()
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
-		myConnection.connection = nil
+		Error("CheckConnection: Could not write PING Err:%s Timing:%s", err, time.Now().Sub(startWrite))
+		myConnection.Disconnect()
 		return false
 	}
 
+	startRead := time.Now()
 	line, isPrefix, err := myConnection.Reader.ReadLine()
 
 	if err == nil && !isPrefix && bytes.Equal(line, protocol.PONG_RESPONSE) {
 		return true
 	} else {
-		Error("CheckConnection: Could not PING Err:%s isPrefix:%t line:%q", err, isPrefix, line)
-		myConnection.connection = nil
+		if err != nil {
+			Error("CheckConnection: Could not read PING. Error: %s Timing:%s", err, time.Now().Sub(startRead))
+		} else if isPrefix {
+			Error("CheckConnection: ReadLine returned prefix: %q", line)
+		} else {
+			Error("CheckConnection: Expected PONG response. Got: %q", line)
+		}
+		myConnection.Disconnect()
 		return false
 	}
 }

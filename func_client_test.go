@@ -166,9 +166,6 @@ func TestRmuxTimeoutConnectionTeardown(t *testing.T) {
 		t.Errorf("Did not receive expected ping from client. Received %q", redisReadBuffer[:nRead])
 	}
 	_, err = mockConn.Write([]byte("+PONG\r\n"))
-	if err != nil {
-		t.Errorf("Error writing PONG back to client: %s", err)
-	}
 
 	// Recycle the connection
 	rmux.PrimaryConnectionPool.RecycleRemoteConnection(conn)

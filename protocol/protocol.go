@@ -29,6 +29,8 @@ import (
 	"bufio"
 	"bytes"
 	. "github.com/forcedotcom/rmux/writer"
+	"time"
+	"github.com/forcedotcom/rmux/graphite"
 )
 
 const (
@@ -420,6 +422,11 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
 	b := make([]byte, 2048)
 	buf := new(bytes.Buffer)
+
+	start := time.Now()
+	defer func() {
+		graphite.Timing("copy_server_responses", time.Now().Sub(start))
+	}()
 
 ScanLoop:
 	for numRead := 0; numRead < numResponses; {

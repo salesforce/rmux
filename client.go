@@ -36,6 +36,7 @@ import (
 	"io"
 	"net"
 	"time"
+	"github.com/forcedotcom/rmux/graphite"
 )
 
 type readItem struct {
@@ -160,6 +161,8 @@ func (this *Client) FlushRedisAndRespond() error {
 
 	numCommands := len(this.queued)
 
+	startWrite := time.Now()
+
 	for _, command := range this.queued {
 		_, err := redisConn.Writer.Write(command.GetBuffer())
 		if err != nil {
@@ -177,6 +180,8 @@ func (this *Client) FlushRedisAndRespond() error {
 			return err
 		}
 	}
+
+	graphite.Timing("redis_write", time.Now().Sub(startWrite))
 
 	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
 		Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)

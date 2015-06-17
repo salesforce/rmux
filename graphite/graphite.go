@@ -31,10 +31,12 @@ import (
 	"fmt"
 	"strings"
 	"strconv"
+	"time"
 )
 
 var udpConn *net.UDPConn = nil
 var prefix string
+var timingsEnabled bool = false
 
 func SetEndpoint(endpoint string) error {
 	addr, err := net.ResolveUDPAddr("udp", endpoint)
@@ -59,6 +61,10 @@ func SetEndpoint(endpoint string) error {
 	return nil
 }
 
+func EnableTimings() {
+	timingsEnabled = true
+}
+
 func Increment(metric string) {
 	if Enabled() {
 		sd := prefix + metric + ":1|c"
@@ -69,6 +75,13 @@ func Increment(metric string) {
 func Gauge(metric string, value int) {
 	if Enabled() {
 		sd := prefix + metric + ":" + strconv.Itoa(value) + "|g"
+		udpConn.Write([]byte(sd))
+	}
+}
+
+func Timing(metric string, value time.Duration) {
+	if Enabled() && timingsEnabled {
+		sd := fmt.Sprintf("%s%s:%.4f|ms", prefix, metric, float64(value)/float64(time.Millisecond))
 		udpConn.Write([]byte(sd))
 	}
 }

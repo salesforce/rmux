@@ -63,6 +63,7 @@ var cpuProfile = flag.String("cpuProfile", "", "Direct CPU Profile to target fil
 var configFile = flag.String("config", "", "Configuration file (JSON)")
 var doDebug = flag.Bool("debug", false, "Debug mode")
 var graphiteServer = flag.String("graphite", "", "Graphite statsd endpoint")
+var doTiming = flag.Bool("timing", false, "Send command timings to graphite")
 
 func main() {
 	flag.Parse()
@@ -85,10 +86,16 @@ func main() {
 	}
 
 	if *graphiteServer != "" {
+		Info("Enabling graphite stats")
 		err := graphite.SetEndpoint(*graphiteServer)
 		if err != nil {
 			Error("Error when setting graphite endpoint: %s", err)
 		}
+	}
+
+	if *doTiming {
+		Info("Enabling graphite timings")
+		graphite.EnableTimings()
 	}
 
 	if *configFile != "" {

@@ -3,7 +3,7 @@ GO=go
 REDISSERV=redis-server
 REDISCLI=redis-cli
 INTSOCK=/tmp/redis-test.sock
-VER=0.3.1.0
+VER=0.3.1.1
 
 all: clean test build-dev build
 
@@ -11,7 +11,7 @@ clean:
 	rm -f ./build/*
 
 test:
-	$(GO) test -v ./...
+	$(GO) test ./...
 
 test-dev:
 	$(GO) test -v -tags 'dev' ./...
@@ -49,7 +49,7 @@ build-all-dev: mkbuild build-dev
 	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build -tags 'dev' -o build/rmux-linux-386-dev ./main
 
 run-example: build
-	./build/rmux -config=./example/config.json
+	./build/rmux -config=./example/config.json -graphite=localhost:8125 -timing
 
 run-example-dev: build-dev
 	./build/rmux-dev -config=./example/config.json
