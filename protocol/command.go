@@ -23,7 +23,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-//Package rmux provides a connection-pooling, multiplexing redis server.
-//Commands are parsed, and multiplexed out based on their arguments.
-//Package rmux/main includes a working server implementation, if no customization is needed
-package rmux
+package protocol
+
+//Represents a redis client that is connected to our rmux server
+type Command interface {
+	GetCommand() []byte
+	GetBuffer() []byte
+	GetFirstArg() []byte
+	GetArgCount() int
+}

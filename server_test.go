@@ -1,75 +1,191 @@
-//Copyright (c) 2013, Salesforce.com, Inc.
-//All rights reserved.
-//
-//Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-//
-//	Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-//	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-//	Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-//
-//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*
+ * Copyright (c) 2015, Salesforce.com, Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ * following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ *   disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+ *   disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * * Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products
+ *   derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 package rmux
 
 import (
 	"bufio"
-	"bytes"
 	"net"
 	"testing"
 	"time"
 )
 
-func TestCountActiveConnections(test *testing.T) {
+func StartPongResponseServer(t *testing.T, sock string) net.Listener {
+	listenSock, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Errorf("Cannot listen on %s: %s", sock, err)
+		return nil
+	}
+
+	go func() {
+		for {
+			c, err := listenSock.Accept()
+			if err != nil {
+				break
+			}
+			rw := bufio.NewReadWriter(bufio.NewReader(c), bufio.NewWriter(c))
+			rw.ReadLine()
+			rw.Write([]byte("+PONG\r\n"))
+			rw.Flush()
+		}
+	}()
+
+	return listenSock
+}
+
+func StartNoResponseServer(t *testing.T, sock string) net.Listener {
+	listenSock, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Errorf("Cannot listen on %s: %s", sock, err)
+		return nil
+	}
+
+	go func() {
+		for {
+			_, err := listenSock.Accept()
+			if err != nil {
+				break
+			}
+			// do nothing
+		}
+	}()
+
+	return listenSock
+}
+
+func TestCountActiveConnections_NoResponse(t *testing.T) {
 	server, err := NewRedisMultiplexer("unix", "/tmp/rmuxTest.sock", 5)
 	if err != nil {
-		test.Fatal("Cannot listen on /tmp/rmuxTest.sock: ", err)
+		t.Fatal("Cannot listen on /tmp/rmuxTest.sock: ", err)
 	}
 	defer func() {
+		server.active = false
 		server.Listener.Close()
 	}()
-	server.EndpointConnectTimeout = 1 * time.Millisecond
-	server.EndpointReadTimeout = 1 * time.Millisecond
 
-	//create a pong-responder on ports 6378 and 6379
+	server.EndpointConnectTimeout = 10 * time.Millisecond
+	server.EndpointReadTimeout = 10 * time.Millisecond
+	server.EndpointWriteTimeout = 10 * time.Millisecond
+
 	server.AddConnection("unix", "/tmp/rmuxTest1.sock")
 	server.AddConnection("unix", "/tmp/rmuxTest2.sock")
 	server.AddConnection("unix", "/tmp/rmuxTest3.sock")
 
-	listenSock, err := net.Listen("unix", "/tmp/rmuxTest1.sock")
-	if err != nil {
-		test.Fatal("Cannot listen on /tmp/rmuxTest1.sock: ", err)
+	//create a non-responder on one socket
+	sock1 := StartNoResponseServer(t, "/tmp/rmuxTest1.sock")
+	if sock1 == nil {
+		t.Error("Cannot listen on /tmp/rmuxTest1.sock: ", err)
+		return
 	}
-	defer func() {
-		listenSock.Close()
-	}()
+	defer sock1.Close()
 
 	connectionCount := server.countActiveConnections()
 
-	if connectionCount == 0 {
-		test.Log("Connection count is 0 as expected")
-	} else {
-		test.Fatal("Server thinks there are active connections, when there are none")
+	if connectionCount != 0 {
+		t.Error("Server thinks there are active connections, when there should be none")
+		return
 	}
+}
 
-	connection := server.ConnectionCluster[0].GetConnection()
-	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
-	server.ConnectionCluster[0].RecycleRemoteConnection(connection)
-
-	listenSock2, err := net.Listen("unix", "/tmp/rmuxTest2.sock")
+func TestCountActiveConnections_SomeResponses(t *testing.T) {
+	server, err := NewRedisMultiplexer("unix", "/tmp/rmuxTest.sock", 5)
 	if err != nil {
-		test.Fatal("Cannot listen on /tmp/rmuxTest2.sock: ", err)
+		t.Fatal("Cannot listen on /tmp/rmuxTest.sock: ", err)
 	}
 	defer func() {
-		listenSock2.Close()
+		server.active = false
+		server.Listener.Close()
 	}()
-	connection = server.ConnectionCluster[1].GetConnection()
-	connection.Reader = bufio.NewReader(bytes.NewBufferString("+PONG\r\n"))
-	server.ConnectionCluster[1].RecycleRemoteConnection(connection)
 
-	connectionCount = server.countActiveConnections()
-	if connectionCount == 2 {
-		test.Log("Connection count is 2 as expected")
-	} else {
-		test.Fatal("Server's connection count is wrong: ", connectionCount, "instead of 2")
+	server.EndpointConnectTimeout = 10 * time.Millisecond
+	server.EndpointReadTimeout = 10 * time.Millisecond
+	server.EndpointWriteTimeout = 10 * time.Millisecond
+
+	server.AddConnection("unix", "/tmp/rmuxTest1.sock")
+	server.AddConnection("unix", "/tmp/rmuxTest2.sock")
+	server.AddConnection("unix", "/tmp/rmuxTest3.sock")
+
+	//create a non-responder on one socket
+	sock1 := StartNoResponseServer(t, "/tmp/rmuxTest1.sock")
+	if sock1 == nil {
+		return
+	}
+	defer sock1.Close()
+
+	// create a pong-responder on another socket
+	sock2 := StartPongResponseServer(t, "/tmp/rmuxTest2.sock")
+	if sock2 == nil {
+		return
+	}
+	defer sock2.Close()
+
+	// no listener on socket 3
+
+	connectionCount := server.countActiveConnections()
+	if connectionCount != 1 {
+		t.Errorf("Server's connection count is wrong: %d instead of 1", connectionCount)
+	}
+}
+
+func TestCountActiveConnections_AllResponses(t *testing.T) {
+	server, err := NewRedisMultiplexer("unix", "/tmp/rmuxTest.sock", 5)
+	if err != nil {
+		t.Fatal("Cannot listen on /tmp/rmuxTest.sock: ", err)
+	}
+	defer func() {
+		server.active = false
+		server.Listener.Close()
+	}()
+
+	server.EndpointConnectTimeout = 10 * time.Millisecond
+	server.EndpointReadTimeout = 10 * time.Millisecond
+	server.EndpointWriteTimeout = 10 * time.Millisecond
+
+	server.AddConnection("unix", "/tmp/rmuxTest1.sock")
+	server.AddConnection("unix", "/tmp/rmuxTest2.sock")
+	server.AddConnection("unix", "/tmp/rmuxTest3.sock")
+
+	// create pong responders
+	sock1 := StartPongResponseServer(t, "/tmp/rmuxTest1.sock")
+	if sock1 == nil {
+		return
+	}
+	defer sock1.Close()
+	sock2 := StartPongResponseServer(t, "/tmp/rmuxTest2.sock")
+	if sock2 == nil {
+		return
+	}
+	defer sock2.Close()
+	sock3 := StartPongResponseServer(t, "/tmp/rmuxTest3.sock")
+	if sock3 == nil {
+		return
+	}
+	defer sock3.Close()
+
+	connectionCount := server.countActiveConnections()
+	if connectionCount != 3 {
+		t.Errorf("Server's connection count is wrong: %d instead of 1", connectionCount)
 	}
 }

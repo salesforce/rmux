@@ -23,7 +23,36 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-//Package rmux provides a connection-pooling, multiplexing redis server.
-//Commands are parsed, and multiplexed out based on their arguments.
-//Package rmux/main includes a working server implementation, if no customization is needed
-package rmux
+package writer
+
+import (
+	"bytes"
+	"io"
+)
+
+const (
+	defaultFlexibleWriterSize = 64
+)
+
+type FlexibleWriter struct {
+	*bytes.Buffer
+	writer io.Writer
+}
+
+func NewFlexibleWriter(writer io.Writer) *FlexibleWriter {
+	w := &FlexibleWriter{}
+	w.writer = writer
+	buf := make([]byte, 0, defaultFlexibleWriterSize)
+	w.Buffer = bytes.NewBuffer(buf)
+	return w
+}
+
+func (this *FlexibleWriter) Flush() (err error) {
+	_, err = this.Buffer.WriteTo(this.writer)
+
+	return
+}
+
+func (this *FlexibleWriter) Buffered() int {
+	return this.Len()
+}

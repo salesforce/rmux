@@ -1,19 +1,36 @@
-//Copyright (c) 2013, Salesforce.com, Inc.
-//All rights reserved.
-//
-//Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-//
-//	Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-//	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-//	Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-//
-//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/*
+ * Copyright (c) 2015, Salesforce.com, Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ * following conditions are met:
+ *
+ * * Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ *   disclaimer.
+ *
+ * * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+ *   disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * * Neither the name of Salesforce.com nor the names of its contributors may be used to endorse or promote products
+ *   derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
 package connection
 
 import (
-	// "github.com/forcedotcom/rmux/protocol"
+	. "github.com/forcedotcom/rmux/log"
 	"time"
+	"sync/atomic"
+	"github.com/forcedotcom/rmux/graphite"
+	"strings"
 )
 
 const (
@@ -31,8 +48,6 @@ type ConnectionPool struct {
 	Protocol string
 	//The endpoint to connect to
 	Endpoint string
-	//Represents whether or not the connection pool is currently up or down
-	IsConnected bool
 	//And overridable connect timeout.  Defaults to EXTERN_CONNECT_TIMEOUT
 	ConnectTimeout time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
@@ -41,66 +56,89 @@ type ConnectionPool struct {
 	WriteTimeout time.Duration
 	//channel of recycled connections, for re-use
 	connectionPool chan *Connection
+	// Number of active connections
+	Count int32
 }
 
 //Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
 //ex: "unix", "/tmp/myAwesomeSocket", 5
-func NewConnectionPool(Protocol, Endpoint string, poolCapacity int) (newConnectionPool *ConnectionPool) {
+func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeout time.Duration,
+		readTimeout time.Duration, writeTimeout time.Duration) (newConnectionPool *ConnectionPool) {
 	newConnectionPool = &ConnectionPool{}
 	newConnectionPool.Protocol = Protocol
 	newConnectionPool.Endpoint = Endpoint
 	newConnectionPool.connectionPool = make(chan *Connection, poolCapacity)
-	newConnectionPool.ConnectTimeout = EXTERN_CONNECT_TIMEOUT
-	newConnectionPool.ReadTimeout = EXTERN_READ_TIMEOUT
-	newConnectionPool.WriteTimeout = EXTERN_WRITE_TIMEOUT
+	newConnectionPool.ConnectTimeout = connectTimeout
+	newConnectionPool.ReadTimeout = readTimeout
+	newConnectionPool.WriteTimeout = writeTimeout
+	newConnectionPool.Count = 0
+
+	// Fill the pool with as many handlers as it asks for
+	for i := 0; i < poolCapacity; i++ {
+		newConnectionPool.connectionPool <- NewConnection(
+			newConnectionPool.Protocol,
+			newConnectionPool.Endpoint,
+			newConnectionPool.ConnectTimeout,
+			newConnectionPool.ReadTimeout,
+			newConnectionPool.WriteTimeout,
+		)
+	}
+
 	return
 }
 
 //Gets a connection from the connection pool
-//If a connection is not ready, snags a new one
-func (myConnectionPool *ConnectionPool) GetConnection() (myConnection *Connection) {
+func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 	select {
-	case myConnection = <-myConnectionPool.connectionPool:
-		return
-	default:
-		myConnection = NewConnection(myConnectionPool.Protocol, myConnectionPool.Endpoint, myConnectionPool.ConnectTimeout, myConnectionPool.ReadTimeout, myConnectionPool.WriteTimeout)
-		return
+	case connection = <-cp.connectionPool:
+		atomic.AddInt32(&cp.Count, 1)
+
+		if err := connection.ReconnectIfNecessary(); err != nil {
+			// Recycle the holder, return an error
+			cp.RecycleRemoteConnection(connection)
+			Error("Received a nil connection in pool.GetConnection: %s", err)
+			return nil, err
+		}
+
+		return connection, nil
+	// TODO: Maybe a while/timeout/graphiteping loop?
 	}
 }
 
 //Recycles a connection back into our connection pool
 //If the pool is full, throws it away
 func (myConnectionPool *ConnectionPool) RecycleRemoteConnection(remoteConnection *Connection) {
-	select {
-	case myConnectionPool.connectionPool <- remoteConnection:
-	default:
-	}
-	return
+	myConnectionPool.connectionPool <- remoteConnection
+	atomic.AddInt32(&myConnectionPool.Count, -1)
 }
 
 //Checks the state of connections in this connection pool
 //If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
 func (myConnectionPool *ConnectionPool) CheckConnectionState() bool {
 	//get a connection from the channel
-	myConnection := myConnectionPool.GetConnection()
-	//If we failed to bind, or if our PING fails, abort
-	if myConnection != nil && myConnection.CheckConnection() {
-		// protocol.Debug("The pool is up\r\n")
-		myConnectionPool.IsConnected = true
-		myConnectionPool.RecycleRemoteConnection(myConnection)
-		return true
-	} else {
-		// protocol.Debug("The pool is down\r\n")
-		myConnectionPool.IsConnected = false
-		for {
-			//drain all the connections
-			select {
-			case myConnection = <-myConnectionPool.connectionPool:
-				continue
-			default:
-				return false
-			}
-		}
+	myConnection, err := myConnectionPool.GetConnection()
+	if err != nil {
+		Error("Error when getting connection from pool: %s", err)
 		return false
 	}
+	defer myConnectionPool.RecycleRemoteConnection(myConnection)
+
+	//If we failed to bind, or if our PING fails, the pool is down
+	if myConnection == nil || myConnection.connection == nil  {
+		return false
+	}
+
+	if !myConnection.CheckConnection() {
+		myConnection.Disconnect()
+		return false
+	}
+
+	return true
+}
+
+func (cp *ConnectionPool) ReportGraphite() {
+	endpoint := strings.Replace(cp.Endpoint, ".", "-", -1)
+	endpoint = strings.Replace(cp.Endpoint, ":", "-", -1)
+
+	graphite.Gauge("pools." + endpoint, int(cp.Count))
 }
