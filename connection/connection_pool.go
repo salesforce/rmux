@@ -91,6 +91,8 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeo
 func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 	select {
 	case connection = <-cp.connectionPool:
+		atomic.AddInt32(&cp.Count, 1)
+
 		if err := connection.ReconnectIfNecessary(); err != nil {
 			// Recycle the holder, return an error
 			cp.RecycleRemoteConnection(connection)
@@ -98,7 +100,6 @@ func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 			return nil, err
 		}
 
-		atomic.AddInt32(&cp.Count, 1)
 		return connection, nil
 	// TODO: Maybe a while/timeout/graphiteping loop?
 	}
