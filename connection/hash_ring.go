@@ -136,7 +136,7 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 		connectionPool = myHashRing.ConnectionPools[hash]
 	}
 
-	if !connectionPool.isConnected() {
+	if !connectionPool.IsConnected() {
 		return nil, ERR_HASHRING_DOWN
 	} else {
 		return connectionPool, nil
