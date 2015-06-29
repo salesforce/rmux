@@ -31,6 +31,8 @@ import (
 	"github.com/forcedotcom/rmux/protocol"
 )
 
+var ERR_HASHRING_DOWN = errors.New("Hash ring is down")
+
 //An outbound connection to a redis server
 //Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
 type HashRing struct {
@@ -105,7 +107,7 @@ func (myHashRing *HashRing) setBitMask(prime int) {
 
 //Gets the connectionKey, for a to-be-multiplexed command
 //Uses the bernstein hash, which is one of the fastest key-distribution algorithms out there
-func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connectionPool *ConnectionPool) {
+func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connectionPool *ConnectionPool, err error) {
 	var hash uint32 = 0
 	if command.GetArgCount() > 0 {
 		//The bernstein hash is one of the faster key-distribution algorithms out there, for small character keys
@@ -116,6 +118,7 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 	}
 
 	hash = myHashRing.BitMask & hash
+	targetHash := hash
 	connectionPool = myHashRing.ConnectionPools[hash]
 
 	for myHashRing.Failover && !connectionPool.IsConnected() {
@@ -124,8 +127,18 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 		} else {
 			hash = hash + 1
 		}
+
+		// If we've cycled through everything, break out
+		if hash == targetHash {
+			break
+		}
+
 		connectionPool = myHashRing.ConnectionPools[hash]
 	}
 
-	return
+	if !connectionPool.isConnected() {
+		return nil, ERR_HASHRING_DOWN
+	} else {
+		return connectionPool, nil
+	}
 }
