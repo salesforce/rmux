@@ -45,6 +45,7 @@ type PoolConfig struct {
 	RemoteReadTimeout    int64      `json:"remoteReadTimeout"`
 	RemoteWriteTimeout   int64      `json:"remoteWriteTimeout"`
 	RemoteConnectTimeout int64      `json:"remoteConnectTimeout"`
+	Failover             bool       `json:"failover"`
 }
 
 func ReadConfigFromFile(configFile string) ([]PoolConfig, error) {

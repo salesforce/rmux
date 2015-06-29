@@ -64,6 +64,7 @@ var configFile = flag.String("config", "", "Configuration file (JSON)")
 var doDebug = flag.Bool("debug", false, "Debug mode")
 var graphiteServer = flag.String("graphite", "", "Graphite statsd endpoint")
 var doTiming = flag.Bool("timing", false, "Send command timings to graphite")
+var failover = flag.Bool("failover", false, "Failover to another connection pool if target pool is down in mux mode")
 
 func main() {
 	flag.Parse()
@@ -134,6 +135,7 @@ func configureFromArgs() ([]PoolConfig, error) {
 		Socket:       *socket,
 		MaxProcesses: *maxProcesses,
 		PoolSize:     *poolSize,
+		Failover:     *failover,
 
 		TcpConnections:  arrTcpConnections,
 		UnixConnections: arrUnixConnections,
@@ -194,6 +196,8 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 		if err != nil {
 			return
 		}
+
+		rmuxInstance.Failover = config.Failover
 
 		if config.LocalTimeout != 0 {
 			timeout := time.Duration(config.LocalTimeout) * time.Millisecond

@@ -129,6 +129,8 @@ func (this *Client) FlushLine(line []byte) (err error) {
 
 // Performs the query against the redis server and responds to the connected client with the response from redis.
 func (this *Client) FlushRedisAndRespond() error {
+	var err error
+
 	if !this.HasQueued() {
 		return this.Writer.Flush()
 	}
@@ -140,7 +142,12 @@ func (this *Client) FlushRedisAndRespond() error {
 		if len(this.queued) != 1 {
 			panic("Should not have multiple commands to flush when multiplexing")
 		}
-		connectionPool = this.HashRing.GetConnectionPool(this.queued[0])
+		connectionPool, err = this.HashRing.GetConnectionPool(this.queued[0])
+		if err != nil {
+			Error("Failed to retrieve a connection pool from the hashring")
+			this.ReadChannel <- readItem{nil, err}
+			return err
+		}
 	}
 
 	redisConn, err := connectionPool.GetConnection()

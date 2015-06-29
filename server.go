@@ -86,6 +86,8 @@ type RedisMultiplexer struct {
 	infoResponse []byte
 	// Read/Write mutex for above infoResponse slice
 	infoMutex sync.RWMutex
+	// Whether to failover to another connection pool if the target connection pool is down (in multiplexing mode)
+	Failover bool
 }
 
 //Sub-task that handles the cleanup when a server goes down
@@ -173,7 +175,7 @@ func (this *RedisMultiplexer) generateMultiplexInfo() {
 
 //Called when a rmux server is ready to begin accepting connections
 func (this *RedisMultiplexer) Start() (err error) {
-	this.HashRing, err = connection.NewHashRing(this.ConnectionCluster)
+	this.HashRing, err = connection.NewHashRing(this.ConnectionCluster, this.Failover)
 	if err != nil {
 		return err
 	}
