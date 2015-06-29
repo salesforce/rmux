@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"github.com/forcedotcom/rmux/graphite"
 	"strings"
+	"sync"
 )
 
 const (
@@ -58,6 +59,9 @@ type ConnectionPool struct {
 	connectionPool chan *Connection
 	// Number of active connections
 	Count int32
+	connectedLock sync.RWMutex
+	// Whether or not the connction pool is up or down
+	isConnected bool
 }
 
 //Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
@@ -112,28 +116,48 @@ func (myConnectionPool *ConnectionPool) RecycleRemoteConnection(remoteConnection
 	atomic.AddInt32(&myConnectionPool.Count, -1)
 }
 
+func (cp *ConnectionPool) SetIsConnected(isConnected bool) {
+	cp.connectedLock.Lock()
+	defer cp.connectedLock.Unlock()
+	cp.isConnected = isConnected
+}
+
+func (cp *ConnectionPool) IsConnected() bool {
+	cp.connectedLock.RLock()
+	defer cp.connectedLock.RUnlock()
+	return cp.isConnected
+}
+
 //Checks the state of connections in this connection pool
 //If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
-func (myConnectionPool *ConnectionPool) CheckConnectionState() bool {
+func (myConnectionPool *ConnectionPool) CheckConnectionState() (isUp bool) {
+	defer func() {
+		myConnectionPool.SetIsConnected(isUp)
+	}()
+
 	//get a connection from the channel
 	myConnection, err := myConnectionPool.GetConnection()
 	if err != nil {
 		Error("Error when getting connection from pool: %s", err)
-		return false
+		isUp = false
+		return
 	}
 	defer myConnectionPool.RecycleRemoteConnection(myConnection)
 
 	//If we failed to bind, or if our PING fails, the pool is down
 	if myConnection == nil || myConnection.connection == nil  {
-		return false
+		isUp = false
+		return
 	}
 
 	if !myConnection.CheckConnection() {
 		myConnection.Disconnect()
-		return false
+		isUp = false
+		return
 	}
 
-	return true
+	isUp = true
+	return
 }
 
 func (cp *ConnectionPool) ReportGraphite() {

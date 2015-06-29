@@ -40,9 +40,11 @@ type HashRing struct {
 	BitMask uint32
 	//The default connection pool
 	DefaultConnectionPool *ConnectionPool
+	// Whether to failover to next pool when the desired one is down
+	Failover bool
 }
 
-func NewHashRing(connectionPools []*ConnectionPool) (newHashRing *HashRing, err error) {
+func NewHashRing(connectionPools []*ConnectionPool, failover bool) (newHashRing *HashRing, err error) {
 	newHashRing = &HashRing{}
 	//The goal here is to have an even distribution of connection pools for a hash,
 	//AND ensuring that the distribution stays balanced when a pool goes down
@@ -53,6 +55,7 @@ func NewHashRing(connectionPools []*ConnectionPool) (newHashRing *HashRing, err 
 		return
 	}
 //	Debug("Making a hash ring for prime %v", prime)
+	newHashRing.Failover = failover
 	newHashRing.setBitMask(prime)
 	newHashRing.ConnectionPools = make([]*ConnectionPool, newHashRing.BitMask+1)
 //	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
@@ -114,5 +117,15 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 
 	hash = myHashRing.BitMask & hash
 	connectionPool = myHashRing.ConnectionPools[hash]
+
+	for myHashRing.Failover && !connectionPool.IsConnected() {
+		if hash == myHashRing.BitMask {
+			hash = 0
+		} else {
+			hash = hash + 1
+		}
+		connectionPool = myHashRing.ConnectionPools[hash]
+	}
+
 	return
 }
