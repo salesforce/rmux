@@ -40,6 +40,7 @@ build: mkbuild
 build-all: mkbuild build
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o build/rmux.amd64.$(VER) ./main
 	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build -o build/rmux.386.$(VER) ./main
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o build/rmux.osx.$(VER) ./main
 
 build-dev: mkbuild
 	$(GO) build -tags 'dev' -o build/rmux-dev ./main

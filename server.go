@@ -40,6 +40,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"bytes"
 )
 
 var (
@@ -298,6 +299,11 @@ ChunkLoop:
 }
 
 func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Command) {
+	if this.multiplexing && bytes.Equal(command.GetCommand(), protocol.INFO_COMMAND) {
+		this.sendMultiplexInfo(client)
+		return
+	}
+
 //	Debug("Writing out %q", command)
 	immediateResponse, err := client.ParseCommand(command)
 
