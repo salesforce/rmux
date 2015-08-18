@@ -253,8 +253,8 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	go client.ReadLoop(this)
 
 	defer func() {
-//		Debug("Client command handling loop closing")
 		// If the multiplexer goes down, deactivate this client.
+//		Debug("Client command handling loop closing")
 		client.Active = false
 	}()
 

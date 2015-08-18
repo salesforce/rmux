@@ -131,7 +131,7 @@ func checkResponse(t *testing.T, in string, expected string) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			t.Fatalf("Error reading from sock: %s %d", err)
+			t.Fatalf("Error reading from sock: %s", err)
 		}
 
 		b.Write(buf[:n])
@@ -169,7 +169,7 @@ func checkMuxResponse(t *testing.T, in string, expected string) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			t.Fatalf("Error reading from sock: %s %d", err)
+			t.Fatalf("Error reading from sock: %s", err)
 		}
 
 		b.Write(buf[:n])
@@ -229,4 +229,13 @@ func TestLargeResponseWithValidation(t *testing.T) {
 	expectedResp := "$" + strconv.Itoa(len(expected)) + "\r\n" + expected + "\r\n"
 
 	checkResponse(t, cmd, expectedResp)
+}
+
+func TestLargeRequest(t *testing.T) {
+	// The data to set: 26 bytes * 3000 = 78000 bytes
+	setData := strings.Repeat("abcdefghijklmnopqrstuvwxyz", 3000);
+	cmd := makeCommand("set somekey " + setData)
+	expected := "+OK\r\n"
+
+	checkResponse(t, cmd, expected)
 }

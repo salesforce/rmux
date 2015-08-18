@@ -26,7 +26,6 @@
 package rmux
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"github.com/forcedotcom/rmux/connection"
@@ -59,7 +58,7 @@ type Client struct {
 	ReadChannel chan readItem
 	HashRing    *connection.HashRing
 	queued      []protocol.Command
-	Scanner     *bufio.Scanner
+	Scanner     *protocol.RespScanner
 }
 
 var (
