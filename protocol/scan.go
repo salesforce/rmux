@@ -26,17 +26,8 @@
 package protocol
 
 import (
-	"bufio"
 	"bytes"
-	"io"
 )
-
-// ================== Base =================
-func NewRespScanner(r io.Reader) *bufio.Scanner {
-	scanner := bufio.NewScanner(r)
-	scanner.Split(ScanResp)
-	return scanner
-}
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	//	if len(data) > 0 {
@@ -247,3 +238,4 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
 	return s, data[:s], nil
 }
+

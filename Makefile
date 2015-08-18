@@ -18,14 +18,16 @@ test-dev:
 
 test-integration:
 	$(REDISSERV) $(PWD)/example/redis.conf
+	sleep 1
 	$(REDISCLI) -s $(INTSOCK) flushall
-	$(GO) test -v -tags 'integration' ./...
+	$(GO) test -tags 'integration' ./...
 	kill -TERM $$(cat /tmp/redis-test-instance-for-rmux.pid)
 
 test-integration-dev:
 	$(REDISSERV) $(PWD)/example/redis.conf
+	sleep 1
 	$(REDISCLI) -s $(INTSOCK) flushall
-	$(GO) test -v -tags 'integration dev' ./...
+	$(GO) test -tags 'integration dev' ./...
 	kill -TERM $$(cat /tmp/redis-test-instance-for-rmux.pid)
 
 fmt:

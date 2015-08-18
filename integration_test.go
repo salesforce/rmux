@@ -131,14 +131,14 @@ func checkResponse(t *testing.T, in string, expected string) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			t.Fatalf("Error reading from sock: %s %d", err)
+			t.Fatalf("Error reading from sock: %s", err)
 		}
 
 		b.Write(buf[:n])
 	}
 
 	if read := b.Next(len(expected)); bytes.Compare(read, []byte(expected)) != 0 {
-		t.Errorf("Did not read the expected response.\r\nGot %q\r\n", read)
+		t.Errorf("Did not read the expected response.\r\nExpected %q\r\nGot      %q\r\n", expected, read)
 	}
 }
 
@@ -169,7 +169,7 @@ func checkMuxResponse(t *testing.T, in string, expected string) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			t.Fatalf("Error reading from sock: %s %d", err)
+			t.Fatalf("Error reading from sock: %s", err)
 		}
 
 		b.Write(buf[:n])
@@ -211,6 +211,12 @@ func TestPipelineResponse(t *testing.T) {
 	checkResponse(t, cmd, expected)
 }
 
+func TestPipelineImmediateResponse(t *testing.T) {
+	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("PING") + makeCommand("get key1")
+	expected := "$-1\r\n+OK\r\n+PONG\r\n$4\r\ntest\r\n"
+	checkResponse(t, cmd, expected)
+}
+
 func TestMuxPipelineResponse(t *testing.T) {
 	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("get key1")
 	expected := "$-1\r\n+OK\r\n$4\r\ntest\r\n"
@@ -230,3 +236,13 @@ func TestLargeResponseWithValidation(t *testing.T) {
 
 	checkResponse(t, cmd, expectedResp)
 }
+
+func TestLargeRequest(t *testing.T) {
+	// The data to set: 26 bytes * 3000 = 78000 bytes
+	setData := strings.Repeat("abcdefghijklmnopqrstuvwxyz", 3000);
+	cmd := makeCommand("set somekey " + setData)
+	expected := "+OK\r\n"
+
+	checkResponse(t, cmd, expected)
+}
+

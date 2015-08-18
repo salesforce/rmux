@@ -27,7 +27,6 @@ package protocol
 
 import (
 	"bufio"
-	"bytes"
 	. "github.com/forcedotcom/rmux/writer"
 	"time"
 	"github.com/forcedotcom/rmux/graphite"
@@ -420,52 +419,24 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
 func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
-	b := make([]byte, 2048)
-	buf := new(bytes.Buffer)
-
 	start := time.Now()
 	defer func() {
 		graphite.Timing("copy_server_responses", time.Now().Sub(start))
 	}()
 
-ScanLoop:
-	for numRead := 0; numRead < numResponses; {
-		n, err := reader.Read(b)
+	scanner := NewRespScanner(reader)
 
-		if err != nil {
-			return err
-		}
-		buf.Write(b[:n])
+	for numRead := 0; numRead < numResponses && scanner.Scan(); {
+		localBuffer.Write(scanner.Bytes())
+		localBuffer.Flush()
+		numRead++
+	}
 
-		for {
-			adv, token, err := ScanResp(buf.Bytes(), false)
-			if err != nil {
-				return err
-			}
-
-			if token == nil {
-				continue ScanLoop
-			}
-
-
-			localBuffer.Write(token)
-			err = localBuffer.Flush()
-			if err != nil {
-				return err
-			}
-
-			// Advance the buf
-			buf.Next(adv)
-
-			numRead++
-			if numRead == numResponses {
-				break ScanLoop
-			}
-		}
+	if sErr := scanner.Err(); sErr != nil {
+		return sErr
 	}
 
 	if err != nil {
-//		Debug("Error %s", err)
 		return err
 	}
 
