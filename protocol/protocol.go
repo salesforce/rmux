@@ -28,7 +28,6 @@ package protocol
 import (
 	"bufio"
 	. "github.com/forcedotcom/rmux/writer"
-	. "github.com/forcedotcom/rmux/log"
 	"time"
 	"github.com/forcedotcom/rmux/graphite"
 )

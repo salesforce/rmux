@@ -253,8 +253,8 @@ func (this *RedisMultiplexer) HandleClientRequests(client *Client) {
 	go client.ReadLoop(this)
 
 	defer func() {
-		// If the multiplexer goes down, deactivate this client.
 //		Debug("Client command handling loop closing")
+		// If the multiplexer goes down, deactivate this client.
 		client.Active = false
 	}()
 
@@ -308,6 +308,11 @@ func (this *RedisMultiplexer) HandleCommand(client *Client, command protocol.Com
 	immediateResponse, err := client.ParseCommand(command)
 
 	if immediateResponse != nil {
+		// Respond with anything we have queued
+		if client.HasQueued() {
+			client.FlushRedisAndRespond()
+		}
+
 		err = client.WriteLine(immediateResponse)
 		if err != nil {
 //			Debug("Error received when writing an immediate response: %s", err)

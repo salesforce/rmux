@@ -138,7 +138,7 @@ func checkResponse(t *testing.T, in string, expected string) {
 	}
 
 	if read := b.Next(len(expected)); bytes.Compare(read, []byte(expected)) != 0 {
-		t.Errorf("Did not read the expected response.\r\nGot %q\r\n", read)
+		t.Errorf("Did not read the expected response.\r\nExpected %q\r\nGot      %q\r\n", expected, read)
 	}
 }
 
@@ -211,6 +211,12 @@ func TestPipelineResponse(t *testing.T) {
 	checkResponse(t, cmd, expected)
 }
 
+func TestPipelineImmediateResponse(t *testing.T) {
+	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("PING") + makeCommand("get key1")
+	expected := "$-1\r\n+OK\r\n+PONG\r\n$4\r\ntest\r\n"
+	checkResponse(t, cmd, expected)
+}
+
 func TestMuxPipelineResponse(t *testing.T) {
 	cmd := makeCommand("get key1") + makeCommand("set key1 test") + makeCommand("get key1")
 	expected := "$-1\r\n+OK\r\n$4\r\ntest\r\n"
@@ -239,3 +245,4 @@ func TestLargeRequest(t *testing.T) {
 
 	checkResponse(t, cmd, expected)
 }
+

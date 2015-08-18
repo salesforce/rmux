@@ -50,31 +50,33 @@ func NewRespScanner(r io.Reader) *RespScanner {
 
 func (s *RespScanner) Scan() bool {
 	for {
-		// See if we can get a token with what we already have.
-		advance, token, err := ScanResp(s.b.Bytes(), s.err != nil)
+		if s.b.Len() > 0 || s.err != nil {
+			// See if we can get a token with what we already have.
+			advance, token, err := ScanResp(s.b.Bytes(), s.err != nil)
 
-		if err != nil {
-			s.setErr(err)
-			return false
-		}
-
-		if !s.advance(advance) {
-			return false
-		}
-
-		s.token = token
-		if token != nil {
-			if s.err == nil || advance > 0 {
-				s.empties = 0
-			} else {
-				// Returning tokens not advancing input at EOF.
-				s.empties++
-				if s.empties > 100 {
-					panic("bufio.Scan: 100 empty tokens without progressing")
-				}
+			if err != nil {
+				s.setErr(err)
+				return false
 			}
 
-			return true
+			if !s.advance(advance) {
+				return false
+			}
+
+			s.token = token
+			if token != nil {
+				if s.err == nil || advance > 0 {
+					s.empties = 0
+				} else {
+					// Returning tokens not advancing input at EOF.
+					s.empties++
+					if s.empties > 100 {
+						panic("rmux.protocol.Scanner: 100 empty tokens without progressing")
+					}
+				}
+
+				return true
+			}
 		}
 
 		// We cannot generate a token with what we are holding.
