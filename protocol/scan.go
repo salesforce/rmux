@@ -54,7 +54,7 @@ func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	case '*':
 		advance, token, err = ScanArray(data, atEOF)
 	default:
-		advance, token, err = 0, nil, ERROR_INVALID_COMMAND_FORMAT
+		advance, token, err = ScanInlineString(data, atEOF)
 	}
 
 	return

@@ -31,6 +31,9 @@ import (
 	"time"
 	"regexp"
 	"os"
+	"sync"
+	"github.com/forcedotcom/rmux/protocol"
+	"bytes"
 )
 
 func TestRecycleConnection(test *testing.T) {
@@ -102,6 +105,8 @@ func _listenSocket(t *testing.T, socketPath string) net.Listener {
 }
 
 func TestCheckConnectionState(test *testing.T) {
+	var wg sync.WaitGroup
+
 	// Listen to on the socket
 	testSocket := "/tmp/rmuxConnectionTest"
 	listenSock := _listenSocket(test, testSocket)
@@ -115,17 +120,38 @@ func TestCheckConnectionState(test *testing.T) {
 	connectionPool.getDiagnosticConnection()
 	connectionPool.releaseDiagnosticConnection()
 
-	// Accept the connection
-	fd, err := listenSock.Accept()
-	if err != nil {
-		test.Errorf("Failed to accept connection: %s", err)
-	}
-	defer listenSock.Close()
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
 
-	// Write a pong response directly to the socket, this will be the first response
-	if _, err := fd.Write([]byte("+PONG\r\n")); err != nil {
-		test.Fatal("Error writing to sock: %s", err)
-	}
+		// Accept the connection
+		fd, err := listenSock.Accept()
+		if err != nil {
+			test.Fatalf("Failed to accept connection: %s", err)
+		}
+		defer listenSock.Close()
+
+		scanner := protocol.NewRespScanner(fd)
+
+		// Read the first ping
+		if !scanner.Scan() {
+			test.Fatalf("Error scanning for bytes: %s", scanner.Err())
+		} else if !bytes.Equal(scanner.Bytes(), []byte("PING\r\n")) {
+			test.Fatalf("Expected %q, got %q instead", "+PING\r\n", scanner.Bytes())
+		}
+		// Write a pong response directly to the socket, this will be the first response
+		if _, err := fd.Write([]byte("+PONG\r\n")); err != nil {
+			test.Fatal("Error writing to sock: %s", err)
+		}
+
+		// Now read a second ping
+		if !scanner.Scan() {
+			test.Fatalf("Error scanning for bytes: %s", scanner.Err())
+		} else if !bytes.Equal(scanner.Bytes(), []byte("PING\r\n")) {
+			test.Fatalf("Expected %q, got %q instead", "+PING\r\n", scanner.Bytes())
+		}
+		// and hang in response
+	}()
 
 	// First attempt should have a pong
 	if !connectionPool.CheckConnectionState() {
@@ -136,4 +162,6 @@ func TestCheckConnectionState(test *testing.T) {
 	if connectionPool.CheckConnectionState() {
 		test.Fatal("In-valid connection's check connection succeeded when it should not have")
 	}
+
+	wg.Wait()
 }
