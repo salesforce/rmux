@@ -3,7 +3,7 @@ GO=go
 REDISSERV=redis-server
 REDISCLI=redis-cli
 INTSOCK=/tmp/redis-test.sock
-VER=0.3.1.5
+VER=0.3.1.6
 
 all: clean test build-dev build
 
