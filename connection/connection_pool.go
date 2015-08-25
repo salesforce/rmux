@@ -57,6 +57,9 @@ type ConnectionPool struct {
 	WriteTimeout time.Duration
 	//channel of recycled connections, for re-use
 	connectionPool chan *Connection
+	// The connection used for diagnostics (like checking that the pool is up)
+	diagnosticConnection *Connection
+	diagnosticConnectionLock sync.Mutex
 	// Number of active connections
 	Count int32
 	connectedLock sync.RWMutex
@@ -79,14 +82,10 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeo
 
 	// Fill the pool with as many handlers as it asks for
 	for i := 0; i < poolCapacity; i++ {
-		newConnectionPool.connectionPool <- NewConnection(
-			newConnectionPool.Protocol,
-			newConnectionPool.Endpoint,
-			newConnectionPool.ConnectTimeout,
-			newConnectionPool.ReadTimeout,
-			newConnectionPool.WriteTimeout,
-		)
+		newConnectionPool.connectionPool <- newConnectionPool.CreateConnection()
 	}
+
+	newConnectionPool.diagnosticConnection = newConnectionPool.CreateConnection()
 
 	return
 }
@@ -107,6 +106,32 @@ func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 		return connection, nil
 	// TODO: Maybe a while/timeout/graphiteping loop?
 	}
+}
+
+// Creates a new Connection basead on the pool's configuration
+func (cp *ConnectionPool) CreateConnection() *Connection {
+	return NewConnection(
+		cp.Protocol,
+		cp.Endpoint,
+		cp.ConnectTimeout,
+		cp.ReadTimeout,
+		cp.WriteTimeout,
+	)
+}
+
+func (cp *ConnectionPool) getDiagnosticConnection() (connection *Connection, err error) {
+	cp.diagnosticConnectionLock.Lock()
+
+	if err := cp.diagnosticConnection.ReconnectIfNecessary(); err != nil {
+		Error("The diangnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
+		return nil, err
+	}
+
+	return cp.diagnosticConnection, nil
+}
+
+func (cp *ConnectionPool) releaseDiagnosticConnection() {
+	cp.diagnosticConnectionLock.Unlock()
 }
 
 //Recycles a connection back into our connection pool
@@ -130,33 +155,31 @@ func (cp *ConnectionPool) IsConnected() bool {
 
 //Checks the state of connections in this connection pool
 //If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
-func (myConnectionPool *ConnectionPool) CheckConnectionState() (isUp bool) {
+func (cp *ConnectionPool) CheckConnectionState() (isUp bool) {
+	isUp = true
 	defer func() {
-		myConnectionPool.SetIsConnected(isUp)
+		cp.SetIsConnected(isUp)
 	}()
 
-	//get a connection from the channel
-	myConnection, err := myConnectionPool.GetConnection()
+	connection, err := cp.getDiagnosticConnection()
 	if err != nil {
-		Error("Error when getting connection from pool: %s", err)
 		isUp = false
 		return
 	}
-	defer myConnectionPool.RecycleRemoteConnection(myConnection)
+	defer cp.releaseDiagnosticConnection()
 
 	//If we failed to bind, or if our PING fails, the pool is down
-	if myConnection == nil || myConnection.connection == nil  {
+	if connection == nil || connection.connection == nil  {
 		isUp = false
 		return
 	}
 
-	if !myConnection.CheckConnection() {
-		myConnection.Disconnect()
+	if !connection.CheckConnection() {
+		connection.Disconnect()
 		isUp = false
 		return
 	}
 
-	isUp = true
 	return
 }
 
