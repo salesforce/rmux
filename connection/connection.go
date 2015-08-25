@@ -80,12 +80,14 @@ func (c *Connection) Disconnect() {
 	c.Writer = nil
 }
 
-func (c *Connection) ReconnectIfNecessary() error {
+func (c *Connection) ReconnectIfNecessary() (err error) {
 	if c.IsConnected() {
 		return nil
 	}
 
-	var err error
+	// If it's not connected, manually disconnect the connection for sanity's sake
+	c.Disconnect()
+
 	c.connection, err = net.DialTimeout(c.protocol, c.endpoint, c.connectTimeout)
 	if err != nil {
 		Error("NewConnection: Error received from dial: %s", err)
