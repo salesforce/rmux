@@ -124,6 +124,7 @@ func (cp *ConnectionPool) getDiagnosticConnection() (connection *Connection, err
 
 	if err := cp.diagnosticConnection.ReconnectIfNecessary(); err != nil {
 		Error("The diangnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
+		cp.diagnosticConnectionLock.Unlock()
 		return nil, err
 	}
 
