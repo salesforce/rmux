@@ -3,7 +3,8 @@ GO=go
 REDISSERV=redis-server
 REDISCLI=redis-cli
 INTSOCK=/tmp/redis-test.sock
-VER=0.3.1.6
+VER=0.3.1.7
+BUILDFLAGS=-ldflags "-X github.com/forcedotcom/rmux.version $(VER)"
 
 all: clean test build-dev build
 
@@ -37,19 +38,19 @@ mkbuild:
 	mkdir -p ./build
 
 build: mkbuild
-	$(GO) build -o build/rmux ./main
+	$(GO) build $(BUILDFLAGS) -o build/rmux ./main
 
 build-all: mkbuild build
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o build/rmux.amd64.$(VER) ./main
-	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build -o build/rmux.386.$(VER) ./main
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o build/rmux.osx.$(VER) ./main
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o build/rmux.amd64.$(VER) ./main
+	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o build/rmux.386.$(VER) ./main
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -o build/rmux.osx.$(VER) ./main
 
 build-dev: mkbuild
-	$(GO) build -tags 'dev' -o build/rmux-dev ./main
+	$(GO) build $(BUILDFLAGS) -tags 'dev' -o build/rmux-dev ./main
 
 build-all-dev: mkbuild build-dev
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -tags 'dev' -o build/rmux-linux-amd64-dev ./main
-	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build -tags 'dev' -o build/rmux-linux-386-dev ./main
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -tags 'dev' -o build/rmux-linux-amd64-dev ./main
+	GOOS=linux GOARCH=386 CGO_ENABLED=0 $(GO) build $(BUILDFLAGS) -tags 'dev' -o build/rmux-linux-386-dev ./main
 
 run-example: build
 	./build/rmux -config=./example/config.json -graphite=localhost:8125 -timing

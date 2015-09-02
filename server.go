@@ -50,6 +50,8 @@ var (
 	CONNECTION_DOWN_RESPONSE = []byte("Connection down")
 )
 
+var version string = "dev"
+
 //The main RedisMultiplexer
 //Listens on a specified socket or port, and assigns out queries to any number of connection pools
 //If more than one connection pool is given multi-key operations are blocked
@@ -168,7 +170,7 @@ func (this *RedisMultiplexer) maintainConnectionStates() {
 
 //Generates the Info response for a multiplexed server
 func (this *RedisMultiplexer) generateMultiplexInfo() {
-	tmpSlice := fmt.Sprintf("rmux_version: %s\r\ngo_version: %s\r\nprocess_id: %d\r\nconnected_clients: %d\r\nactive_endpoints: %d\r\ntotal_endpoints: %d\r\nrole: master\r\n", "1.0", runtime.Version(), os.Getpid(), this.connectionCount, this.activeConnectionCount, len(this.ConnectionCluster))
+	tmpSlice := fmt.Sprintf("rmux_version: %s\r\ngo_version: %s\r\nprocess_id: %d\r\nconnected_clients: %d\r\nactive_endpoints: %d\r\ntotal_endpoints: %d\r\nrole: master\r\n", version, runtime.Version(), os.Getpid(), this.connectionCount, this.activeConnectionCount, len(this.ConnectionCluster))
 	this.infoMutex.Lock()
 	this.infoResponse = []byte(fmt.Sprintf("$%d\r\n%s", len(tmpSlice), tmpSlice))
 	this.infoMutex.Unlock()
