@@ -30,12 +30,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	. "github.com/forcedotcom/rmux/log"
-	"github.com/forcedotcom/rmux/protocol"
-	. "github.com/forcedotcom/rmux/writer"
+	. "github.com/SalesforceEng/rmux/log"
+	"github.com/SalesforceEng/rmux/protocol"
+	. "github.com/SalesforceEng/rmux/writer"
 	"net"
 	"time"
-	"github.com/forcedotcom/rmux/graphite"
+	"github.com/SalesforceEng/rmux/graphite"
 )
 
 //An outbound connection to a redis server

@@ -29,8 +29,8 @@ package rmux
 import (
 	"bufio"
 	"bytes"
-	"github.com/forcedotcom/rmux/protocol"
-	"github.com/forcedotcom/rmux/writer"
+	"github.com/SalesforceEng/rmux/protocol"
+	"github.com/SalesforceEng/rmux/writer"
 	"net"
 	"testing"
 	"time"

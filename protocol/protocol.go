@@ -27,9 +27,9 @@ package protocol
 
 import (
 	"bufio"
-	. "github.com/forcedotcom/rmux/writer"
+	. "github.com/SalesforceEng/rmux/writer"
 	"time"
-	"github.com/forcedotcom/rmux/graphite"
+	"github.com/SalesforceEng/rmux/graphite"
 )
 
 const (
