@@ -29,7 +29,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/forcedotcom/rmux/writer"
+	"github.com/SalesforceEng/rmux/writer"
 	"net"
 	"testing"
 	"time"

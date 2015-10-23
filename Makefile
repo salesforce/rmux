@@ -4,7 +4,7 @@ REDISSERV=redis-server
 REDISCLI=redis-cli
 INTSOCK=/tmp/redis-test.sock
 VER=0.3.1.7
-BUILDFLAGS=-ldflags "-X github.com/forcedotcom/rmux.version $(VER)"
+BUILDFLAGS=-ldflags "-X github.com/SalesforceEng/rmux.version=$(VER)"
 
 all: clean test build-dev build
 
