@@ -30,6 +30,7 @@ import (
 	. "github.com/SalesforceEng/rmux/writer"
 	"time"
 	"github.com/SalesforceEng/rmux/graphite"
+	"io"
 )
 
 const (
@@ -426,10 +427,16 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 
 	scanner := NewRespScanner(reader)
 
-	for numRead := 0; numRead < numResponses && scanner.Scan(); {
+	numRead := 0
+
+	for ; numRead < numResponses && scanner.Scan(); {
 		localBuffer.Write(scanner.Bytes())
 		localBuffer.Flush()
 		numRead++
+	}
+
+	if numRead < numResponses {
+		return io.EOF
 	}
 
 	if sErr := scanner.Err(); sErr != nil {
