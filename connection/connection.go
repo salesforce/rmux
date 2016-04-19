@@ -167,5 +167,29 @@ func (myConnection *Connection) CheckConnection() bool {
 }
 
 func (c *Connection) IsConnected() bool {
-	return c.connection != nil
+	if c.connection == nil {
+		return false
+	}
+
+	// Adds a hundredth a milli...
+	c.connection.SetReadDeadline(time.Now().Add(time.Microsecond * 10))
+	var b [4]byte
+	n, err := c.connection.Read(b[:])
+
+	if err != nil {
+		if err, ok := err.(net.Error); ok {
+			if err.Timeout() {
+				return true
+			}
+		}
+
+		Info("There was an error when checking the connection (%s), will reconnect the connection", err)
+		return false
+	}
+
+	if n != 0 {
+		Warn("Got %d bytes back when we expected 0.", n)
+	}
+
+	return true
 }
