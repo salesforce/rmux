@@ -163,7 +163,7 @@ func TestNewUnixConnection(test *testing.T) {
 }
 
 func TestNewTcpConnection(test *testing.T) {
-	testEndpoint := "localhost:6379"
+	testEndpoint := "localhost:8886"
 	listenSock, err := net.Listen("tcp", testEndpoint)
 	if err != nil {
 		test.Fatalf("Error listening on tcp sock %s. Error: %s", testEndpoint, err)

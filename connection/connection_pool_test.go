@@ -59,26 +59,23 @@ func TestRecycleConnection(test *testing.T) {
 		test.Errorf("Failed to get second connection: %s", err)
 		return
 	}
+	connectionPool.RecycleRemoteConnection(connection)
+	if err != nil {
+		test.Errorf("Should have been able to get a recycled connection: %s", err)
+		return
+	}
+	connectionPool.RecycleRemoteConnection(connection2)
 
 	listenSock.Close()
-	connectionPool.RecycleRemoteConnection(connection)
-	connectionPool.RecycleRemoteConnection(connection2)
 	connection, err = connectionPool.GetConnection()
-	if err != nil {
-		test.Errorf("Failed to get first connection: %s", err)
+	if err == nil {
+		test.Errorf("Should not have been able to get the third connection")
 		return
 	}
 
 	connection, err = connectionPool.GetConnection()
-	if err != nil {
-		test.Errorf("Failed to get second connection: %s", err)
-		return
-	}
-	connectionPool.RecycleRemoteConnection(connection)
-
-	connection, err = connectionPool.GetConnection()
-	if err != nil {
-		test.Errorf("Failed to get recycled connection: %s", err)
+	if err == nil {
+		test.Errorf("Should have failed to get the fourth connection", err)
 		return
 	}
 }

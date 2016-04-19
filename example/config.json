@@ -1,7 +1,8 @@
 [
 	{
-		"socket": "/tmp/rmux-job-1-master.sock",
+		"socket": "/tmp/rmux-example-run.sock",
 		"tcpConnections": [ "localhost:6379" ],
+		"poolSize": 2,
 	  	"remoteTimeout": 2000
 	}
 ]
