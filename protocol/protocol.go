@@ -28,8 +28,6 @@ package protocol
 import (
 	"bufio"
 	. "github.com/SalesforceEng/rmux/writer"
-	"time"
-	"github.com/SalesforceEng/rmux/graphite"
 	"io"
 )
 
@@ -420,10 +418,10 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 //Copies a server response from the remoteBuffer into your localBuffer
 //If a protocol or buffer error is encountered, it is bubbled up
 func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
-	start := time.Now()
-	defer func() {
-		graphite.Timing("copy_server_responses", time.Now().Sub(start))
-	}()
+	//start := time.Now()
+	//defer func() {
+	//	graphite.Timing("copy_server_responses", time.Now().Sub(start))
+	//}()
 
 	scanner := NewRespScanner(reader)
 

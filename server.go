@@ -185,9 +185,9 @@ func (this *RedisMultiplexer) Start() (err error) {
 
 	go this.maintainConnectionStates()
 	go this.initializeCleanup()
-	if graphite.Enabled() {
-		go this.GraphiteCheckin()
-	}
+	//if graphite.Enabled() {
+	//	go this.GraphiteCheckin()
+	//}
 
 	for this.active {
 		fd, err := this.Listener.Accept()

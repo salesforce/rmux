@@ -135,10 +135,10 @@ func (myConnection *Connection) CheckConnection() bool {
 		return false
 	}
 
-	start := time.Now()
-	defer func() {
-		graphite.Timing("check_connection", time.Now().Sub(start))
-	}()
+	//start := time.Now()
+	//defer func() {
+	//	graphite.Timing("check_connection", time.Now().Sub(start))
+	//}()
 
 	startWrite := time.Now()
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
