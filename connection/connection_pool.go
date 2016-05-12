@@ -100,6 +100,7 @@ func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 			// Recycle the holder, return an error
 			cp.RecycleRemoteConnection(connection)
 			Error("Received a nil connection in pool.GetConnection: %s", err)
+			graphite.Increment("reconnect_error");
 			return nil, err
 		}
 
