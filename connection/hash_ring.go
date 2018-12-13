@@ -27,7 +27,7 @@ package connection
 
 import (
 	"errors"
-//	. "github.com/SalesforceEng/rmux/log"
+	//	. "github.com/SalesforceEng/rmux/log"
 	"github.com/SalesforceEng/rmux/protocol"
 )
 
@@ -56,11 +56,11 @@ func NewHashRing(connectionPools []*ConnectionPool, failover bool) (newHashRing 
 	if err != nil {
 		return
 	}
-//	Debug("Making a hash ring for prime %v", prime)
+	//	Debug("Making a hash ring for prime %v", prime)
 	newHashRing.Failover = failover
 	newHashRing.setBitMask(prime)
 	newHashRing.ConnectionPools = make([]*ConnectionPool, newHashRing.BitMask+1)
-//	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
+	//	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
 
 	newHashRing.distributeConnectionPools(prime, connectionPools)
 	return
@@ -120,6 +120,11 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 	hash = myHashRing.BitMask & hash
 	targetHash := hash
 	connectionPool = myHashRing.ConnectionPools[hash]
+	var retry uint32
+	for retry < myHashRing.BitMask && !connectionPool.IsConnected() {
+		hash = myHashRing.BitMask & (hash + 1)
+		connectionPool = myHashRing.ConnectionPools[hash]
+	}
 
 	for myHashRing.Failover && !connectionPool.IsConnected() {
 		if hash == myHashRing.BitMask {
