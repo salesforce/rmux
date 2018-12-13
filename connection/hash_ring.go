@@ -124,7 +124,7 @@ func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connect
 	for retry < myHashRing.BitMask && !connectionPool.IsConnected() {
 		hash = myHashRing.BitMask & (hash + 1)
 		connectionPool = myHashRing.ConnectionPools[hash]
-		retry += 1
+		retry++
 	}
 
 	for myHashRing.Failover && !connectionPool.IsConnected() {
