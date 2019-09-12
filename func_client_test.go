@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 	"net"
-	"github.com/SalesforceEng/rmux/connection"
+	"github.com/dvankley/rmux/connection"
 	"bytes"
 )
 

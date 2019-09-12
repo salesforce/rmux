@@ -32,7 +32,7 @@ import (
 	"regexp"
 	"os"
 	"sync"
-	"github.com/SalesforceEng/rmux/protocol"
+	"github.com/dvankley/rmux/protocol"
 	"bytes"
 )
 

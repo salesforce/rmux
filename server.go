@@ -27,10 +27,10 @@ package rmux
 
 import (
 	"fmt"
-	"github.com/SalesforceEng/rmux/connection"
-	"github.com/SalesforceEng/rmux/graphite"
-	. "github.com/SalesforceEng/rmux/log"
-	"github.com/SalesforceEng/rmux/protocol"
+	"github.com/dvankley/rmux/connection"
+	"github.com/dvankley/rmux/graphite"
+	. "github.com/dvankley/rmux/log"
+	"github.com/dvankley/rmux/protocol"
 	"io"
 	"net"
 	"os"
