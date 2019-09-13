@@ -45,24 +45,30 @@ const (
 )
 
 var slw *syslog.Writer
+var _enableSyslog = true
 var _level = LOG_INFO
-
-func init() {
-	var e error
-	slw, e = syslog.New(syslog.LOG_INFO, "rmux")
-	if e != nil {
-		fmt.Printf("Error initializing syslog: %s\r\n", e)
-	}
-}
 
 func SetLogLevel(level int) {
 	_level = level
 }
 
+func UseSyslog(useSyslog bool)  {
+	_enableSyslog = useSyslog
+	if useSyslog {
+		var e error
+		slw, e = syslog.New(syslog.LOG_INFO, "rmux")
+		if e != nil {
+			fmt.Printf("Error initializing syslog: %s\r\n", e)
+		}
+	}
+}
+
 func Info(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	slw.Info(out)
+	if _enableSyslog {
+		slw.Info(out)
+	}
 	if LOG_INFO <= _level {
 		fmt.Println(out)
 	}
@@ -72,7 +78,9 @@ func Debug(format string, a ...interface{}) {
 	if LOG_DEBUG <= _level {
 		out := fmt.Sprintf(format, a...)
 
-		slw.Info(out)
+		if _enableSyslog {
+			slw.Info(out)
+		}
 		fmt.Println(out)
 	}
 }
@@ -80,7 +88,9 @@ func Debug(format string, a ...interface{}) {
 func Error(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	slw.Err(out)
+	if _enableSyslog {
+		slw.Err(out)
+	}
 	if LOG_ERR <= _level {
 		fmt.Println(out)
 	}
@@ -93,7 +103,9 @@ func LogPanic(r interface{}) {
 func Warn(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	slw.Warning(out)
+	if _enableSyslog {
+		slw.Warning(out)
+	}
 	if LOG_WARNING <= _level {
 		fmt.Println(out)
 	}
