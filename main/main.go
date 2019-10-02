@@ -29,8 +29,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/dvankley/rmux"
-	. "github.com/dvankley/rmux/log"
+	"github.com/salesforce/rmux"
+	. "github.com/salesforce/rmux/log"
 	"net"
 	"os"
 	"runtime"
@@ -39,7 +39,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"github.com/dvankley/rmux/graphite"
+	"github.com/salesforce/rmux/graphite"
 	"time"
 )
 

@@ -27,7 +27,7 @@ package protocol
 
 import (
 	"bufio"
-	. "github.com/dvankley/rmux/writer"
+	. "github.com/salesforce/rmux/writer"
 	"io"
 )
 

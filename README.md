@@ -18,8 +18,8 @@ When rmux hit production, we saw immediate gains in our 90th-percentile and uppe
 ## Installing ##
 
 - Install [Go](http://golang.org/doc/install) 
-- go get -u github.com/dvankley/rmux
-- go build -o /usr/local/bin/rmux github.com/dvankley/rmux/main
+- go get -u github.com/salesforce/rmux
+- go build -o /usr/local/bin/rmux github.com/salesforce/rmux/main
 
 
 ## Usage ##
