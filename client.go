@@ -172,7 +172,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	for _, command := range this.queued {
 		_, err := redisConn.Writer.Write(command.GetBuffer())
 		if err != nil {
-			Error("Error when writing to server: %s. Disconnecting the connection.")
+			Error("Error when writing to server: %s. Disconnecting the connection.", err)
 			redisConn.Disconnect()
 			return err
 		}
@@ -181,7 +181,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	for redisConn.Writer.Buffered() > 0 {
 		err := redisConn.Writer.Flush()
 		if err != nil {
-			Error("Error when flushing to server: %s. Disconnecting the connection.")
+			Error("Error when flushing to server: %s. Disconnecting the connection.", err)
 			redisConn.Disconnect()
 			return err
 		}

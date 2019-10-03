@@ -75,7 +75,7 @@ func TestRecycleConnection(test *testing.T) {
 
 	connection, err = connectionPool.GetConnection()
 	if err == nil {
-		test.Errorf("Should have failed to get the fourth connection", err)
+		test.Errorf("Should have failed to get the fourth connection: %s", err)
 		return
 	}
 }
@@ -138,7 +138,7 @@ func TestCheckConnectionState(test *testing.T) {
 		}
 		// Write a pong response directly to the socket, this will be the first response
 		if _, err := fd.Write([]byte("+PONG\r\n")); err != nil {
-			test.Fatal("Error writing to sock: %s", err)
+			test.Fatalf("Error writing to sock: %s", err)
 		}
 
 		// Now read a second ping

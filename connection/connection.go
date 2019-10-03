@@ -119,7 +119,11 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	}
 
 	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
-		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%q", err, line, isPrefix)
+		if err == nil {
+			err = errors.New("unknown ReadLine error")
+		}
+
+		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 		this.Disconnect()
 		return errors.New("Invalid select response")
 	}
