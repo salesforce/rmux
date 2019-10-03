@@ -66,7 +66,7 @@ func UseSyslog(useSyslog bool)  {
 func Info(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	if _enableSyslog {
+	if _enableSyslog && slw != nil {
 		slw.Info(out)
 	}
 	if LOG_INFO <= _level {
@@ -78,7 +78,7 @@ func Debug(format string, a ...interface{}) {
 	if LOG_DEBUG <= _level {
 		out := fmt.Sprintf(format, a...)
 
-		if _enableSyslog {
+		if _enableSyslog && slw != nil {
 			slw.Info(out)
 		}
 		fmt.Println(out)
@@ -88,7 +88,7 @@ func Debug(format string, a ...interface{}) {
 func Error(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	if _enableSyslog {
+	if _enableSyslog && slw != nil {
 		slw.Err(out)
 	}
 	if LOG_ERR <= _level {
@@ -103,7 +103,7 @@ func LogPanic(r interface{}) {
 func Warn(format string, a ...interface{}) {
 	out := fmt.Sprintf(format, a...)
 
-	if _enableSyslog {
+	if _enableSyslog && slw != nil {
 		slw.Warning(out)
 	}
 	if LOG_WARNING <= _level {
