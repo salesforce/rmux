@@ -26,10 +26,10 @@
 package connection
 
 import (
-	. "github.com/SalesforceEng/rmux/log"
+	. "github.com/salesforce/rmux/log"
 	"time"
 	"sync/atomic"
-	"github.com/SalesforceEng/rmux/graphite"
+	"github.com/salesforce/rmux/graphite"
 	"strings"
 	"sync"
 )

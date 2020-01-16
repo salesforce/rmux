@@ -27,8 +27,8 @@ package connection
 
 import (
 	"errors"
-//	. "github.com/SalesforceEng/rmux/log"
-	"github.com/SalesforceEng/rmux/protocol"
+//	. "github.com/salesforce/rmux/log"
+	"github.com/salesforce/rmux/protocol"
 )
 
 var ERR_HASHRING_DOWN = errors.New("Hash ring is down")

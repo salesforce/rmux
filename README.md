@@ -1,4 +1,4 @@
-[![Travis CI](https://travis-ci.org/SalesforceEng/rmux.svg?branch=master)](https://travis-ci.org/SalesforceEng/rmux)
+[![Travis CI](https://travis-ci.org/salesforce/rmux.svg?branch=master)](https://travis-ci.org/salesforce/rmux)
 # Rmux #
 
 Rmux is a Redis connection pooler and multiplexer, written in Go.  Rmux is meant to be used for LAMP stacks, or other short-lived process applications, with high request volume.  It should be run as a client, on every server that connects to redis--to reduce the total inbound connection count to the redis servers, while handle consistent multiplexing.
@@ -18,8 +18,8 @@ When rmux hit production, we saw immediate gains in our 90th-percentile and uppe
 ## Installing ##
 
 - Install [Go](http://golang.org/doc/install) 
-- go get -u github.com/SalesforceEng/rmux
-- go build -o /usr/local/bin/rmux github.com/SalesforceEng/rmux/main
+- go get -u github.com/salesforce/rmux
+- go build -o /usr/local/bin/rmux github.com/salesforce/rmux/main
 
 
 ## Usage ##

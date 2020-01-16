@@ -29,8 +29,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/SalesforceEng/rmux"
-	. "github.com/SalesforceEng/rmux/log"
+	"github.com/salesforce/rmux"
+	. "github.com/salesforce/rmux/log"
 	"net"
 	"os"
 	"runtime"
@@ -39,7 +39,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"github.com/SalesforceEng/rmux/graphite"
+	"github.com/salesforce/rmux/graphite"
 	"time"
 )
 
@@ -65,6 +65,7 @@ var doDebug = flag.Bool("debug", false, "Debug mode")
 var graphiteServer = flag.String("graphite", "", "Graphite statsd endpoint")
 var doTiming = flag.Bool("timing", false, "Send command timings to graphite")
 var failover = flag.Bool("failover", false, "Failover to another connection pool if target pool is down in mux mode")
+var useSyslog = flag.Bool("useSyslog", true, "If true, outputs to syslog as well as stdout")
 
 func main() {
 	flag.Parse()
@@ -85,6 +86,7 @@ func main() {
 	} else {
 		SetLogLevel(LOG_INFO)
 	}
+	UseSyslog(*useSyslog)
 
 	if *graphiteServer != "" {
 		Info("Enabling graphite stats")

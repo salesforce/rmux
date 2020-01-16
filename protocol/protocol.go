@@ -27,7 +27,7 @@ package protocol
 
 import (
 	"bufio"
-	. "github.com/SalesforceEng/rmux/writer"
+	. "github.com/salesforce/rmux/writer"
 	"io"
 )
 
@@ -206,7 +206,7 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 	} else if command[0] == 'p' {
 		//supported: ping, psetex, pttl
 		if command[1] == 'u' {
-			if command[2] == 'n' || (command[2] == 'b' && command[2] == 's') {
+			if command[2] == 'n' || (command[2] == 'b' && command[3] == 's') {
 				// unsupported: punsubscribe, pubsub
 				return false
 			} else if command[2] == 'b' && command[3] == 'l' {

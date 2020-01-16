@@ -30,12 +30,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	. "github.com/SalesforceEng/rmux/log"
-	"github.com/SalesforceEng/rmux/protocol"
-	. "github.com/SalesforceEng/rmux/writer"
+	. "github.com/salesforce/rmux/log"
+	"github.com/salesforce/rmux/protocol"
+	. "github.com/salesforce/rmux/writer"
 	"net"
 	"time"
-	"github.com/SalesforceEng/rmux/graphite"
+	"github.com/salesforce/rmux/graphite"
 )
 
 //An outbound connection to a redis server
@@ -119,7 +119,11 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	}
 
 	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
-		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%q", err, line, isPrefix)
+		if err == nil {
+			err = errors.New("unknown ReadLine error")
+		}
+
+		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 		this.Disconnect()
 		return errors.New("Invalid select response")
 	}
