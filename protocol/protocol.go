@@ -59,6 +59,11 @@ var (
 	SHORT_PING_COMMAND  = []byte("PING")
 	SELECT_COMMAND      = []byte("select")
 	QUIT_COMMAND        = []byte("quit")
+	WATCH_COMMAND       = []byte("watch")
+	UNWATCH_COMMAND     = []byte("unwatch")
+	MULTI_COMMAND       = []byte("multi")
+	EXEC_COMMAND        = []byte("exec")
+	DISCARD_COMMAND     = []byte("discard")
 
 	//Responses declared once for convenience
 	OK_RESPONSE   = []byte("+OK")
@@ -77,14 +82,11 @@ var (
 		"client":       true,
 		"config":       true,
 		"dbsize":       true,
-		"discard":      true,
 		"debug":        true,
-		"exec":         true,
 		"lastsave":     true,
 		"move":         true,
 		"monitor":      true,
 		"migrate":      true,
-		"multi":        true,
 		"object":       true,
 		"punsubscribe": true,
 		"psubscribe":   true,
@@ -98,8 +100,6 @@ var (
 		"sync":         true,
 		"time":         true,
 		"unsubscribe":  true,
-		"unwatch":      true,
-		"watch":        true,
 	}
 
 	//These functions will only work if multiplexing is disabled.
@@ -107,13 +107,16 @@ var (
 	SINGLE_DB_FUNCTIONS = map[string]bool{
 		"bitop":       true,
 		"brpoplpush":  true,
+		"discard":     true,
 		"eval":        true,
+		"exec":        true,
 		"keys":        true,
 		"flushall":    true,
 		"flushdb":     true,
 		"mget":        true,
 		"mset":        true,
 		"msetnx":      true,
+		"multi":       true,
 		"rename":      true,
 		"renamenx":    true,
 		"rpoplpush":   true,
@@ -124,6 +127,8 @@ var (
 		"sinterstore": true,
 		"smove":       true,
 		"sunion":      true,
+		"unwatch":     true,
+		"watch":       true,
 		"sunionstore": true,
 		"zinterstore": true,
 		"zunionstore": true,
@@ -138,8 +143,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		if command[2] == 'l' && isMultipleArgument {
 			return false
 		}
+		//supported if multiplexing is disabled: discard
+		if command[1] == 'i' {
+			return !isMultiplexing
+		}
 		//supported: decr, decrby, del, dump
-		//unsupported: debug, dbsize, discard
+		//unsupported: debug, dbsize
 		return (command[1] == 'e' || command[1] == 'u') && command[2] != 'b'
 	} else if command[0] == 'g' {
 		//supported: get, getbit, getrange, getset
@@ -257,11 +266,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//supported: time, ttl, type
 		return true
 	} else if command[0] == 'u' {
-		//unsupported: unsubscribe, unwatch
-		return false
+		//supported if multiplexing is disabled: unwatch
+		//unsupported: unsubscribe
+		return command[2] == 'w' && !isMultiplexing
 	} else if command[0] == 'w' {
-		//unsupported: watch
-		return false
+		//supported if not multiplexing: watch
+		return !isMultiplexing
 	} else if command[0] == 'a' {
 		//supported: append
 		//unsupported: auth
@@ -280,9 +290,9 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//unsupported: client, config
 		return false
 	} else if command[0] == 'e' {
-		//unsupported: exec
+		//supported if multiplexing is disabled: exec
 		if command[2] == 'e' {
-			return false
+			return !isMultiplexing
 		}
 		//supported: echo, exists, expire, expireat
 		//supported if not multiplexing: eval, evalsha
@@ -294,12 +304,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//supported if not multiplexing: keys
 		return !isMultiplexing
 	} else if command[0] == 'm' {
-		//supported if not multiplexing: mget, mset, msetnx
-		//unsupported: move, monitor, migrate, multi
+		//supported if not multiplexing: mget, mset, msetnx, multi
+		//unsupported: move, monitor, migrate
 		if isMultiplexing {
 			return false
 		}
-		return command[1] == 'g' || command[1] == 's'
+		return command[1] == 'g' || command[1] == 's' || command[1] == 'u'
 	} else if command[0] == 'o' {
 		return false
 	}

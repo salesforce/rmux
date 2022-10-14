@@ -75,6 +75,8 @@ type RedisMultiplexer struct {
 	ClientReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	ClientWriteTimeout time.Duration
+	//An overridable transaction timeout.  Defaults to EXTERN_TRANSACTION_TIMEOUT
+	ClientTransactionTimeout time.Duration
 	// The graphite statsd server to ping with metrics
 	GraphiteServer *string
 	//Whether or not the multiplexer is active.  Used to determine when a tear-down should be occuring
@@ -127,6 +129,7 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 	newRedisMultiplexer.EndpointWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.ClientReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.ClientWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
+	newRedisMultiplexer.ClientTransactionTimeout = EXTERN_TRANSACTION_TIMEOUT
 	newRedisMultiplexer.infoMutex = sync.RWMutex{}
 	//	Debug("Redis Multiplexer Initialized")
 	return
@@ -198,21 +201,20 @@ func (this *RedisMultiplexer) Start() (err error) {
 		//		Debug("Accepted connection.")
 		graphite.Increment("accepted")
 
-		go this.initializeClient(fd)
+		go this.initializeClient(fd, this.ClientTransactionTimeout)
 	}
 	time.Sleep(100 * time.Millisecond)
 	return
 }
 
 // Initializes a client's connection to our server.  Sets up our disconnect hooks and then passes the client off for request handling
-func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
+func (this *RedisMultiplexer) initializeClient(localConnection net.Conn, transactionTimeout time.Duration) {
 	defer func() {
 		atomic.AddInt32(&this.connectionCount, -1)
 	}()
 	atomic.AddInt32(&this.connectionCount, 1)
 	//Add the connection to our internal list
-	myClient := NewClient(localConnection, this.ClientReadTimeout, this.ClientWriteTimeout,
-		this.multiplexing, this.HashRing)
+	myClient := NewClient(localConnection, this.multiplexing, this.HashRing, transactionTimeout)
 
 	defer func() {
 		if r := recover(); r != nil {

@@ -7,6 +7,7 @@ Configuration can be handled either via command-line arguments or via config fil
   -host="localhost": The host to listen for incoming connections on
   -localReadTimeout=0: Timeout to set locally (read)
   -localTimeout=0: Timeout to set locally (read+write)
+  -localTransactionTimeout=0: Timeout to set locally (transaction)
   -localWriteTimeout=0: Timeout to set locally (write)
   -maxProcesses=0: The number of processes to use.  If this is not defined, go's default is used.
   -poolSize=50: The size of the connection pools to use
@@ -38,6 +39,7 @@ for the configuration json is as follows:
     "localTimeout": int,
     "localReadTimeout": int,
     "localWriteTimeout": int,
+    "localTransactionTimeout": int,
 
     "remoteTimeout": int,
     "remoteReadTimeout": int,

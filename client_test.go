@@ -60,7 +60,7 @@ func TestReadCommand(t *testing.T) {
 		t.Fatal("Could not dial in to our local rmux sock")
 	}
 	defer testConnection.Close()
-	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
+	client := NewClient(testConnection, true, nil, 1*time.Millisecond)
 
 	for _, data := range testData {
 		input := bytes.NewBuffer([]byte(data.input))
@@ -134,7 +134,7 @@ func TestParseCommand(test *testing.T) {
 	}
 	defer testConnection.Close()
 
-	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
+	client := NewClient(testConnection, true, nil, 1*time.Millisecond)
 
 	for _, testCase := range testCases {
 		w := new(bytes.Buffer)

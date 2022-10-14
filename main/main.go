@@ -55,6 +55,7 @@ var unixConnections = flag.String("unixConnections", "", "Unix connections (dest
 var localTimeout = flag.Int64("localTimeout", 0, "Timeout to set locally in milliseconds (read+write)")
 var localReadTimeout = flag.Int64("localReadTimeout", 0, "Timeout to set locally in milliseconds (read)")
 var localWriteTimeout = flag.Int64("localWriteTimeout", 0, "Timeout to set locally (write)")
+var localTransactionTimeout = flag.Int64("localTransactionTimeout", 0, "Timeout to set for locally in milliseconds (connect)")
 var remoteTimeout = flag.Int64("remoteTimeout", 0, "Timeout to set for remote redises (connect+read+write)")
 var remoteReadTimeout = flag.Int64("remoteReadTimeout", 0, "Timeout to set for remote redises (read)")
 var remoteWriteTimeout = flag.Int64("remoteWriteTimeout", 0, "Timeout to set for remote redises (write)")
@@ -142,9 +143,10 @@ func configureFromArgs() ([]PoolConfig, error) {
 		TcpConnections:  arrTcpConnections,
 		UnixConnections: arrUnixConnections,
 
-		LocalTimeout:      *localTimeout,
-		LocalReadTimeout:  *localReadTimeout,
-		LocalWriteTimeout: *localWriteTimeout,
+		LocalTimeout:            *localTimeout,
+		LocalReadTimeout:        *localReadTimeout,
+		LocalWriteTimeout:       *localWriteTimeout,
+		LocalTransactionTimeout: *localTransactionTimeout,
 
 		RemoteTimeout:        *remoteTimeout,
 		RemoteReadTimeout:    *remoteReadTimeout,
@@ -218,6 +220,12 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 			timeout := time.Duration(config.LocalWriteTimeout) * time.Millisecond
 			rmuxInstance.ClientWriteTimeout = timeout
 			log.Info("Setting local client write timeout to: %s", timeout)
+		}
+
+		if config.LocalTransactionTimeout != 0 {
+			timeout := time.Duration(config.LocalTransactionTimeout) * time.Millisecond
+			rmuxInstance.ClientTransactionTimeout = timeout
+			log.Info("Setting local client transaction timeout to: %s", timeout)
 		}
 
 		if config.RemoteTimeout != 0 {
