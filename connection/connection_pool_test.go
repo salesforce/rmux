@@ -26,14 +26,14 @@
 package connection
 
 import (
+	"bytes"
 	"net"
+	"os"
+	"regexp"
+	"rmux/protocol"
+	"sync"
 	"testing"
 	"time"
-	"regexp"
-	"os"
-	"sync"
-	"github.com/salesforce/rmux/protocol"
-	"bytes"
 )
 
 func TestRecycleConnection(test *testing.T) {

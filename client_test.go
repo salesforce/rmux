@@ -29,9 +29,9 @@ package rmux
 import (
 	"bufio"
 	"bytes"
-	"github.com/salesforce/rmux/protocol"
-	"github.com/salesforce/rmux/writer"
 	"net"
+	"rmux/protocol"
+	"rmux/writer"
 	"testing"
 	"time"
 )
@@ -64,7 +64,6 @@ func TestReadCommand(t *testing.T) {
 
 	for _, data := range testData {
 		input := bytes.NewBuffer([]byte(data.input))
-
 
 		client.Writer = writer.NewFlexibleWriter(new(bytes.Buffer))
 		client.Scanner = protocol.NewRespScanner(input)
@@ -165,4 +164,3 @@ func TestParseCommand(test *testing.T) {
 		}
 	}
 }
-

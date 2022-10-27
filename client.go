@@ -28,14 +28,14 @@ package rmux
 import (
 	"bytes"
 	"errors"
-	"github.com/salesforce/rmux/connection"
-	. "github.com/salesforce/rmux/log"
-	"github.com/salesforce/rmux/protocol"
-	. "github.com/salesforce/rmux/writer"
 	"io"
 	"net"
+	"rmux/connection"
+	"rmux/graphite"
+	"rmux/log"
+	"rmux/protocol"
+	"rmux/writer"
 	"time"
-	"github.com/salesforce/rmux/graphite"
 )
 
 type readItem struct {
@@ -43,10 +43,10 @@ type readItem struct {
 	err     error
 }
 
-//Represents a redis client that is connected to our rmux server
+// Represents a redis client that is connected to our rmux server
 type Client struct {
 	//The underlying ReadWriter for this connection
-	Writer *FlexibleWriter
+	Writer *writer.FlexibleWriter
 	//Whether or not this client needs to consider multiplexing
 	Multiplexing bool
 	Connection   net.Conn
@@ -67,11 +67,11 @@ var (
 	ERR_TIMEOUT         = errors.New("Proxy timeout")
 )
 
-//Initializes a new client, for the given established net connection, with the specified read/write timeouts
+// Initializes a new client, for the given established net connection, with the specified read/write timeouts
 func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isMuliplexing bool, hashRing *connection.HashRing) (newClient *Client) {
 	newClient = &Client{}
 	newClient.Connection = connection
-	newClient.Writer = NewFlexibleWriter(connection)
+	newClient.Writer = writer.NewFlexibleWriter(connection)
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
 	newClient.ReadChannel = make(chan readItem, 10000)
@@ -82,7 +82,7 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	return
 }
 
-//Parses the given command
+// Parses the given command
 func (this *Client) ParseCommand(command protocol.Command) ([]byte, error) {
 	//block all unsafe commands
 	if !protocol.IsSupportedFunction(command.GetCommand(), this.Multiplexing, command.GetArgCount() > 2) {
@@ -143,7 +143,7 @@ func (this *Client) FlushRedisAndRespond() error {
 		}
 		connectionPool, err = this.HashRing.GetConnectionPool(this.queued[0])
 		if err != nil {
-			Error("Failed to retrieve a connection pool from the hashring")
+			log.Error("Failed to retrieve a connection pool from the hashring")
 			this.ReadChannel <- readItem{nil, err}
 			return err
 		}
@@ -151,7 +151,7 @@ func (this *Client) FlushRedisAndRespond() error {
 
 	redisConn, err := connectionPool.GetConnection()
 	if err != nil {
-		Error("Failed to retrieve an active connection from the provided connection pool")
+		log.Error("Failed to retrieve an active connection from the provided connection pool")
 		this.ReadChannel <- readItem{nil, ERR_CONNECTION_DOWN}
 		return ERR_CONNECTION_DOWN
 	}
@@ -172,7 +172,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	for _, command := range this.queued {
 		_, err := redisConn.Writer.Write(command.GetBuffer())
 		if err != nil {
-			Error("Error when writing to server: %s. Disconnecting the connection.", err)
+			log.Error("Error when writing to server: %s. Disconnecting the connection.", err)
 			redisConn.Disconnect()
 			return err
 		}
@@ -181,7 +181,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	for redisConn.Writer.Buffered() > 0 {
 		err := redisConn.Writer.Flush()
 		if err != nil {
-			Error("Error when flushing to server: %s. Disconnecting the connection.", err)
+			log.Error("Error when flushing to server: %s. Disconnecting the connection.", err)
 			redisConn.Disconnect()
 			return err
 		}
@@ -190,7 +190,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	graphite.Timing("redis_write", time.Now().Sub(startWrite))
 
 	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
-		Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)
+		log.Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)
 		redisConn.Disconnect()
 		this.ReadChannel <- readItem{nil, err}
 		return err
