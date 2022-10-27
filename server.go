@@ -65,7 +65,11 @@ type RedisMultiplexer struct {
 	PoolSize int
 	//The primary connection key to use.  If we're not operating on a key-based operation, it will go here
 	PrimaryConnectionPool *connection.ConnectionPool
-	//And overridable connect timeout.  Defaults to EXTERN_CONNECT_TIMEOUT
+	//User to use for authentication against the upstream redis server(s).
+	AuthUser string
+	//Password to use for authentication against the upstream redis server(s).
+	AuthPassword string
+	//An overridable connect timeout.  Defaults to EXTERN_CONNECT_TIMEOUT
 	EndpointConnectTimeout time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
 	EndpointReadTimeout time.Duration
@@ -135,7 +139,8 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 // Adds a connection to the redis multiplexer, for the given protocol and endpoint
 func (this *RedisMultiplexer) AddConnection(remoteProtocol, remoteEndpoint string) {
 	connectionCluster := connection.NewConnectionPool(remoteProtocol, remoteEndpoint, this.PoolSize,
-		this.EndpointConnectTimeout, this.EndpointReadTimeout, this.EndpointWriteTimeout)
+		this.EndpointConnectTimeout, this.EndpointReadTimeout, this.EndpointWriteTimeout, this.AuthUser,
+		this.AuthPassword)
 	this.ConnectionCluster = append(this.ConnectionCluster, connectionCluster)
 	if len(this.ConnectionCluster) == 1 {
 		this.PrimaryConnectionPool = connectionCluster

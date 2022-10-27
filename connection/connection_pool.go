@@ -49,6 +49,10 @@ type ConnectionPool struct {
 	Protocol string
 	//The endpoint to connect to
 	Endpoint string
+	//User to use for authentication against the upstream redis server(s).
+	AuthUser string
+	//Password to use for authentication against the upstream redis server(s).
+	AuthPassword string
 	//And overridable connect timeout.  Defaults to EXTERN_CONNECT_TIMEOUT
 	ConnectTimeout time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
@@ -70,10 +74,13 @@ type ConnectionPool struct {
 // Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
 // ex: "unix", "/tmp/myAwesomeSocket", 5
 func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeout time.Duration,
-	readTimeout time.Duration, writeTimeout time.Duration) (newConnectionPool *ConnectionPool) {
+	readTimeout time.Duration, writeTimeout time.Duration, authUser string,
+	authPassword string) (newConnectionPool *ConnectionPool) {
 	newConnectionPool = &ConnectionPool{}
 	newConnectionPool.Protocol = Protocol
 	newConnectionPool.Endpoint = Endpoint
+	newConnectionPool.AuthUser = authUser
+	newConnectionPool.AuthPassword = authPassword
 	newConnectionPool.connectionPool = make(chan *Connection, poolCapacity)
 	newConnectionPool.ConnectTimeout = connectTimeout
 	newConnectionPool.ReadTimeout = readTimeout
@@ -117,6 +124,8 @@ func (cp *ConnectionPool) CreateConnection() *Connection {
 		cp.ConnectTimeout,
 		cp.ReadTimeout,
 		cp.WriteTimeout,
+		cp.AuthUser,
+		cp.AuthPassword,
 	)
 }
 

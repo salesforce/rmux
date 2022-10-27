@@ -38,6 +38,8 @@ type PoolConfig struct {
 	PoolSize             int      `json:"poolSize"`
 	TcpConnections       []string `json:"tcpConnections"`
 	UnixConnections      []string `json:"unixConnections"`
+	AuthUser             string   `json:"authUser"`
+	AuthPassword         string   `json:"authPassword"`
 	LocalTimeout         int64    `json:"localTimeout"`
 	LocalReadTimeout     int64    `json:"localReadTimeout"`
 	LocalWriteTimeout    int64    `json:"localWriteTimeout"`

@@ -42,7 +42,7 @@ func verifySelectDatabaseSuccess(test *testing.T, database int) {
 		test.Fatal("Failed to listen on test socket ", testSocket)
 	}
 	defer listenSock.Close()
-	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	testConnection.ReconnectIfNecessary()
 
 	//read buffer does't matter
@@ -77,7 +77,7 @@ func verifySelectDatabaseError(test *testing.T, database int) {
 	defer func() {
 		listenSock.Close()
 	}()
-	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	testConnection.ReconnectIfNecessary()
 	//read buffer does't matter
 	readBuf := bufio.NewReader(bytes.NewBufferString("+NOPE\r\n"))
@@ -106,7 +106,7 @@ func verifySelectDatabaseTimeout(test *testing.T, database int) {
 	}
 	defer listenSock.Close()
 
-	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	testConnection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	if err := testConnection.ReconnectIfNecessary(); err != nil {
 		test.Fatalf("Could not connect to testSocket %s: %s", testSocket, err)
 	}
@@ -149,13 +149,13 @@ func TestNewUnixConnection(test *testing.T) {
 	}
 	defer listenSock.Close()
 
-	connection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	connection := NewConnection("unix", testSocket, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	connection.ReconnectIfNecessary()
 	if connection == nil || connection.connection == nil {
 		test.Fatal("Connection initialization returned nil, binding to unix endpoint failed")
 	}
 
-	connection = NewConnection("unix", "/tmp/thisdoesnotexist", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	connection = NewConnection("unix", "/tmp/thisdoesnotexist", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	connection.ReconnectIfNecessary()
 	if connection != nil && connection.connection != nil {
 		test.Fatal("Connection initialization success, binding to fake unix endpoint succeeded????")
@@ -170,14 +170,14 @@ func TestNewTcpConnection(test *testing.T) {
 	}
 	defer listenSock.Close()
 
-	connection := NewConnection("tcp", testEndpoint, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	connection := NewConnection("tcp", testEndpoint, 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	connection.ReconnectIfNecessary()
 	if connection == nil || connection.connection == nil {
 		test.Fatal("Connection initialization returned nil, binding to tcp endpoint failed")
 	}
 
 	//reserved sock should have nothing on it
-	connection = NewConnection("tcp", "localhost:49151", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond)
+	connection = NewConnection("tcp", "localhost:49151", 10*time.Millisecond, 10*time.Millisecond, 10*time.Millisecond, "", "")
 	connection.ReconnectIfNecessary()
 	if connection != nil && connection.connection != nil {
 		test.Fatal("Connection initialization success, binding to fake tcp endpoint succeeded????")
@@ -194,7 +194,7 @@ func TestCheckConnection(test *testing.T) {
 		listenSock.Close()
 	}()
 
-	connection := NewConnection("unix", testSocket, 100*time.Millisecond, 100*time.Millisecond, 100*time.Millisecond)
+	connection := NewConnection("unix", testSocket, 100*time.Millisecond, 100*time.Millisecond, 100*time.Millisecond, "", "")
 	connection.ReconnectIfNecessary()
 	if connection == nil {
 		test.Fatal("Connection initialization returned nil, binding to unix endpoint failed")

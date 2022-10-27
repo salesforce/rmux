@@ -246,6 +246,9 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 			log.Info("Setting remote redis write timeout to: %s", duration)
 		}
 
+		rmuxInstance.AuthUser = config.AuthUser
+		rmuxInstance.AuthPassword = config.AuthPassword
+
 		if len(config.TcpConnections) > 0 {
 			for _, tcpConnection := range config.TcpConnections {
 				log.Info("Adding tcp (destination) connection: %s", tcpConnection)

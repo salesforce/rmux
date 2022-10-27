@@ -51,6 +51,8 @@ type Connection struct {
 
 	protocol       string
 	endpoint       string
+	authUser       string
+	authPassword   string
 	connectTimeout time.Duration
 	readTimeout    time.Duration
 	writeTimeout   time.Duration
@@ -58,10 +60,13 @@ type Connection struct {
 
 // Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
 // ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
-func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) *Connection {
+func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration,
+	authUser string, authPassword string) *Connection {
 	c := &Connection{}
 	c.protocol = Protocol
 	c.endpoint = Endpoint
+	c.authUser = authUser
+	c.authPassword = authPassword
 	c.connectTimeout = ConnectTimeout
 	c.readTimeout = ReadTimeout
 	c.writeTimeout = WriteTimeout
@@ -100,6 +105,10 @@ func (c *Connection) ReconnectIfNecessary() (err error) {
 	c.Writer = writer.NewFlexibleWriter(netReadWriter)
 	c.Reader = bufio.NewReader(netReadWriter)
 
+	if err = c.authenticate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -129,6 +138,44 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	}
 
 	this.DatabaseId = DatabaseId
+	return
+}
+
+// Tries to authenticate the connection
+// If an error is returned, or if an invalid response is returned from the AUTH command, then this will return an error
+func (this *Connection) authenticate() (err error) {
+	if this.connection == nil {
+		log.Error("authenticate: Using an invalid connection")
+		return errors.New("authenticating against an invalid connection")
+	}
+
+	if this.authPassword == "" {
+		return
+	}
+
+	authCommand := fmt.Sprintf("AUTH %s", this.authPassword)
+
+	if this.authUser != "" {
+		authCommand = fmt.Sprintf("AUTH %s %s", this.authUser, this.authPassword)
+	}
+
+	err = protocol.WriteLine([]byte(authCommand), this.Writer, true)
+	if err != nil {
+		log.Error("authenticate: Error received from protocol.FlushLine: %s", err)
+		return
+	}
+
+	line, isPrefix, err := this.Reader.ReadLine()
+	if err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
+		if err == nil {
+			err = errors.New("unknown ReadLine error")
+		}
+
+		log.Error("authenticate: Error while attempting to authenticate. Err:%q Response:%q isPrefix:%t",
+			err, line, isPrefix)
+		this.Disconnect()
+		return errors.New("invalid authentication response")
+	}
 	return
 }
 
