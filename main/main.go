@@ -29,17 +29,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/salesforce/rmux"
-	. "github.com/salesforce/rmux/log"
 	"net"
 	"os"
+	"rmux"
+	"rmux/graphite"
+	"rmux/log"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
-	"github.com/salesforce/rmux/graphite"
 	"time"
 )
 
@@ -82,22 +82,22 @@ func main() {
 	}
 
 	if *doDebug {
-		SetLogLevel(LOG_DEBUG)
+		log.SetLogLevel(log.LOG_DEBUG)
 	} else {
-		SetLogLevel(LOG_INFO)
+		log.SetLogLevel(log.LOG_INFO)
 	}
-	UseSyslog(*useSyslog)
+	log.UseSyslog(*useSyslog)
 
 	if *graphiteServer != "" {
-		Info("Enabling graphite stats")
+		log.Info("Enabling graphite stats")
 		err := graphite.SetEndpoint(*graphiteServer)
 		if err != nil {
-			Error("Error when setting graphite endpoint: %s", err)
+			log.Error("Error when setting graphite endpoint: %s", err)
 		}
 	}
 
 	if *doTiming {
-		Info("Enabling graphite timings")
+		log.Info("Enabling graphite timings")
 		graphite.EnableTimings()
 	}
 
@@ -111,7 +111,7 @@ func main() {
 	rmuxInstances, err := createInstances(configs)
 	terminateIfError(err, "Error creating rmux instances: %s\r\n")
 
-	Info("Starting %d rmux instances", len(rmuxInstances))
+	log.Info("Starting %d rmux instances", len(rmuxInstances))
 
 	start(rmuxInstances)
 }
@@ -176,20 +176,20 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 		var rmuxInstance *rmux.RedisMultiplexer
 
 		if config.MaxProcesses > 0 {
-			Info("Max processes increased to: %d from: %d", config.MaxProcesses, runtime.GOMAXPROCS(config.MaxProcesses))
+			log.Info("Max processes increased to: %d from: %d", config.MaxProcesses, runtime.GOMAXPROCS(config.MaxProcesses))
 		}
 
 		if config.PoolSize < 1 {
-			Info("Pool size must be positive - defaulting to %d", DEFAULT_POOL_SIZE)
+			log.Info("Pool size must be positive - defaulting to %d", DEFAULT_POOL_SIZE)
 			config.PoolSize = DEFAULT_POOL_SIZE
 		}
 
 		if config.Socket != "" {
 			syscall.Umask(0111)
-			Info("Initializing rmux server on socket %s", config.Socket)
+			log.Info("Initializing rmux server on socket %s", config.Socket)
 			rmuxInstance, err = rmux.NewRedisMultiplexer("unix", config.Socket, config.PoolSize)
 		} else {
-			Info("Initializing rmux server on host: %s and port: %d", config.Host, config.Port)
+			log.Info("Initializing rmux server on host: %s and port: %d", config.Host, config.Port)
 			rmuxInstance, err = rmux.NewRedisMultiplexer("tcp", net.JoinHostPort(config.Host, strconv.Itoa(config.Port)), config.PoolSize)
 		}
 
@@ -205,19 +205,19 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 			timeout := time.Duration(config.LocalTimeout) * time.Millisecond
 			rmuxInstance.ClientReadTimeout = timeout
 			rmuxInstance.ClientWriteTimeout = timeout
-			Info("Setting local client read and write timeouts to: %s", timeout)
+			log.Info("Setting local client read and write timeouts to: %s", timeout)
 		}
 
 		if config.LocalReadTimeout != 0 {
 			timeout := time.Duration(config.LocalReadTimeout) * time.Millisecond
 			rmuxInstance.ClientReadTimeout = timeout
-			Info("Setting local client read timeout to: %s", timeout)
+			log.Info("Setting local client read timeout to: %s", timeout)
 		}
 
 		if config.LocalWriteTimeout != 0 {
 			timeout := time.Duration(config.LocalWriteTimeout) * time.Millisecond
 			rmuxInstance.ClientWriteTimeout = timeout
-			Info("Setting local client write timeout to: %s", timeout)
+			log.Info("Setting local client write timeout to: %s", timeout)
 		}
 
 		if config.RemoteTimeout != 0 {
@@ -225,37 +225,40 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 			rmuxInstance.EndpointConnectTimeout = duration
 			rmuxInstance.EndpointReadTimeout = duration
 			rmuxInstance.EndpointWriteTimeout = duration
-			Info("Setting remote redis connect, read, and write timeouts to: %s", duration)
+			log.Info("Setting remote redis connect, read, and write timeouts to: %s", duration)
 		}
 
 		if config.RemoteConnectTimeout != 0 {
 			duration := time.Duration(config.RemoteConnectTimeout) * time.Millisecond
 			rmuxInstance.EndpointConnectTimeout = duration
-			Info("Setting remote redis connect timeout to: %s", duration)
+			log.Info("Setting remote redis connect timeout to: %s", duration)
 		}
 
 		if config.RemoteReadTimeout != 0 {
 			duration := time.Duration(config.RemoteReadTimeout) * time.Millisecond
 			rmuxInstance.EndpointReadTimeout = duration
-			Info("Setting remote redis read timeouts to: %s", duration)
+			log.Info("Setting remote redis read timeouts to: %s", duration)
 		}
 
 		if config.RemoteWriteTimeout != 0 {
 			duration := time.Duration(config.RemoteWriteTimeout) * time.Millisecond
 			rmuxInstance.EndpointWriteTimeout = duration
-			Info("Setting remote redis write timeout to: %s", duration)
+			log.Info("Setting remote redis write timeout to: %s", duration)
 		}
+
+		rmuxInstance.AuthUser = config.AuthUser
+		rmuxInstance.AuthPassword = config.AuthPassword
 
 		if len(config.TcpConnections) > 0 {
 			for _, tcpConnection := range config.TcpConnections {
-				Info("Adding tcp (destination) connection: %s", tcpConnection)
+				log.Info("Adding tcp (destination) connection: %s", tcpConnection)
 				rmuxInstance.AddConnection("tcp", tcpConnection)
 			}
 		}
 
 		if len(config.UnixConnections) > 0 {
 			for _, unixConnection := range config.UnixConnections {
-				Info("Adding unix (destination) connection: %s", unixConnection)
+				log.Info("Adding unix (destination) connection: %s", unixConnection)
 				rmuxInstance.AddConnection("unix", unixConnection)
 			}
 		}
@@ -301,7 +304,7 @@ func terminateIfError(err error, format string, a ...interface{}) {
 	if err != nil {
 		allArgs := append([]interface{}{err}, a...)
 
-		Error(format, allArgs...)
+		log.Error(format, allArgs...)
 		os.Exit(1)
 	}
 }

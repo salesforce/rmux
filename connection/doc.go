@@ -23,7 +23,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
-//Package rmux/connection provides a way to open outbound connections to redis servers.
-//Connections are aware of redis databases and subscriptions, and come with a connectionPool for recycling.
+// Package rmux/connection provides a way to open outbound connections to redis servers.
+// Connections are aware of redis databases and subscriptions, and come with a connectionPool for recycling.
 package connection
