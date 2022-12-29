@@ -187,6 +187,9 @@ func createInstances(configs []PoolConfig) (rmuxInstances []*rmux.RedisMultiplex
 		if config.Socket != "" {
 			syscall.Umask(0111)
 			log.Info("Initializing rmux server on socket %s", config.Socket)
+			if err = os.RemoveAll(config.Socket); err != nil {
+				return
+			}
 			rmuxInstance, err = rmux.NewRedisMultiplexer("unix", config.Socket, config.PoolSize)
 		} else {
 			log.Info("Initializing rmux server on host: %s and port: %d", config.Host, config.Port)
