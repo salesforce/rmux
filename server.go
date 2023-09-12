@@ -48,6 +48,8 @@ var (
 	MULTIPLEX_OPERATION_UNSUPPORTED_RESPONSE = []byte("This command is not supported for multiplexing servers")
 	//Response code for when a client can't connect to any target servers
 	CONNECTION_DOWN_RESPONSE = []byte("Connection down")
+	//Default diagnostic check interval
+	EXTERN_DIAGNOSTIC_CHECK_INTERVAL = 1 * time.Second
 )
 
 var version string = "dev"
@@ -73,6 +75,8 @@ type RedisMultiplexer struct {
 	EndpointWriteTimeout time.Duration
 	//An overridable reconnection interval. Defaults to EXTERN_RECONNECT_INTERVAL
 	EndpointReconnectInterval time.Duration
+	//An overridable diagnostic check interval.  Defaults to EXTERN_DIAGNOSTIC_CHECK_INTERVAL
+	EndpointDiagnosticCheckInterval time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
 	ClientReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
@@ -128,6 +132,7 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 	newRedisMultiplexer.EndpointReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.EndpointWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.EndpointReconnectInterval = connection.EXTERN_RECONNECT_INTERVAL
+	newRedisMultiplexer.EndpointDiagnosticCheckInterval = EXTERN_DIAGNOSTIC_CHECK_INTERVAL
 	newRedisMultiplexer.ClientReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.ClientWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.infoMutex = sync.RWMutex{}
@@ -173,7 +178,7 @@ func (this *RedisMultiplexer) maintainConnectionStates() {
 		runtime.ReadMemStats(&m)
 		//		// Debug("Memory profile: InUse(%d) Idle (%d) Released(%d)", m.HeapInuse, m.HeapIdle, m.HeapReleased)
 		this.generateMultiplexInfo()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(this.EndpointDiagnosticCheckInterval)
 	}
 }
 
