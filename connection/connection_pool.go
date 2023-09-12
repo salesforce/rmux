@@ -41,6 +41,8 @@ const (
 	EXTERN_READ_TIMEOUT = time.Millisecond * 500
 	//Default write timeout, for connection pools.  Can be adjusted on individual pools after initialization
 	EXTERN_WRITE_TIMEOUT = time.Millisecond * 500
+	// Default reconnect interval, for connection pools. Can be adjusted on individual pools after initialization
+	EXTERN_RECONNECT_INTERVAL = time.Hour * 24
 )
 
 // A pool of connections to a single outbound redis server
@@ -55,6 +57,8 @@ type ConnectionPool struct {
 	ReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	WriteTimeout time.Duration
+	//An overridable reconnection interval. Defaults to EXTERN_RECONNECT_INTERVAL
+	ReconnectInterval time.Duration
 	//channel of recycled connections, for re-use
 	connectionPool chan *Connection
 	// The connection used for diagnostics (like checking that the pool is up)
@@ -70,7 +74,8 @@ type ConnectionPool struct {
 // Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
 // ex: "unix", "/tmp/myAwesomeSocket", 5
 func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeout time.Duration,
-	readTimeout time.Duration, writeTimeout time.Duration) (newConnectionPool *ConnectionPool) {
+	readTimeout time.Duration, writeTimeout time.Duration,
+	reconnectInterval time.Duration) (newConnectionPool *ConnectionPool) {
 	newConnectionPool = &ConnectionPool{}
 	newConnectionPool.Protocol = Protocol
 	newConnectionPool.Endpoint = Endpoint
@@ -78,6 +83,7 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeo
 	newConnectionPool.ConnectTimeout = connectTimeout
 	newConnectionPool.ReadTimeout = readTimeout
 	newConnectionPool.WriteTimeout = writeTimeout
+	newConnectionPool.ReconnectInterval = reconnectInterval
 	newConnectionPool.Count = 0
 
 	// Fill the pool with as many handlers as it asks for
@@ -117,6 +123,7 @@ func (cp *ConnectionPool) CreateConnection() *Connection {
 		cp.ConnectTimeout,
 		cp.ReadTimeout,
 		cp.WriteTimeout,
+		cp.ReconnectInterval,
 	)
 }
 

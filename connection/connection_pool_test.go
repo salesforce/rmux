@@ -46,7 +46,7 @@ func TestRecycleConnection(test *testing.T) {
 
 	//Setting the channel at size 2 makes this more interesting
 	timeout := 500 * time.Millisecond
-	connectionPool := NewConnectionPool("unix", testSocket, 2, timeout, timeout, timeout)
+	connectionPool := NewConnectionPool("unix", testSocket, 2, timeout, timeout, timeout, time.Hour)
 
 	connection, err := connectionPool.GetConnection()
 	if err != nil {
@@ -111,7 +111,7 @@ func TestCheckConnectionState(test *testing.T) {
 
 	// Create the pool, have a size of zero so that no connections are made except for diagnostics
 	timeout := 10 * time.Millisecond
-	connectionPool := NewConnectionPool("unix", testSocket, 0, timeout, timeout, timeout)
+	connectionPool := NewConnectionPool("unix", testSocket, 0, timeout, timeout, timeout, time.Hour)
 
 	// get and release which will actually create the connection
 	connectionPool.getDiagnosticConnection()

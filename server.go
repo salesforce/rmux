@@ -71,6 +71,8 @@ type RedisMultiplexer struct {
 	EndpointReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	EndpointWriteTimeout time.Duration
+	//An overridable reconnection interval. Defaults to EXTERN_RECONNECT_INTERVAL
+	EndpointReconnectInterval time.Duration
 	//An overridable read timeout.  Defaults to EXTERN_READ_TIMEOUT
 	ClientReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
@@ -125,6 +127,7 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 	newRedisMultiplexer.EndpointConnectTimeout = connection.EXTERN_CONNECT_TIMEOUT
 	newRedisMultiplexer.EndpointReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.EndpointWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
+	newRedisMultiplexer.EndpointReconnectInterval = connection.EXTERN_RECONNECT_INTERVAL
 	newRedisMultiplexer.ClientReadTimeout = connection.EXTERN_READ_TIMEOUT
 	newRedisMultiplexer.ClientWriteTimeout = connection.EXTERN_WRITE_TIMEOUT
 	newRedisMultiplexer.infoMutex = sync.RWMutex{}
@@ -135,7 +138,8 @@ func NewRedisMultiplexer(listenProtocol, listenEndpoint string, poolSize int) (n
 // Adds a connection to the redis multiplexer, for the given protocol and endpoint
 func (this *RedisMultiplexer) AddConnection(remoteProtocol, remoteEndpoint string) {
 	connectionCluster := connection.NewConnectionPool(remoteProtocol, remoteEndpoint, this.PoolSize,
-		this.EndpointConnectTimeout, this.EndpointReadTimeout, this.EndpointWriteTimeout)
+		this.EndpointConnectTimeout, this.EndpointReadTimeout, this.EndpointWriteTimeout,
+		this.EndpointReconnectInterval)
 	this.ConnectionCluster = append(this.ConnectionCluster, connectionCluster)
 	if len(this.ConnectionCluster) == 1 {
 		this.PrimaryConnectionPool = connectionCluster
