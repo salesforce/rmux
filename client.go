@@ -208,6 +208,7 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 					select {
 					case <-this.transactionDoneChannel:
 					case <-time.After(this.TransactionTimeout):
+						log.Error("Transaction timed out. Disconnecting the connection.")
 						this.ReadChannel <- readItem{nil, ERR_TRANSACTION_TIMEOUT}
 						redisConn.Disconnect()
 					}
