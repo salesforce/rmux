@@ -144,7 +144,7 @@ func (this *RedisMultiplexer) AddConnection(remoteProtocol, remoteEndpoint strin
 	}
 }
 
-// Counts the number of active endpoints on the server
+// Counts the number of active endpoints (connection pools) on the server
 func (this *RedisMultiplexer) countActiveConnections() (activeConnections int) {
 	activeConnections = 0
 	for _, connectionPool := range this.ConnectionCluster {
@@ -152,10 +152,15 @@ func (this *RedisMultiplexer) countActiveConnections() (activeConnections int) {
 			activeConnections++
 		}
 	}
+
+	if this.activeConnectionCount < activeConnections {
+		log.Info("Connected diagnostics connection.")
+	}
 	return
 }
 
 // Checks the status of all connections, and calculates how many of them are currently up
+// This only counts connection pools / diagnostic connections not real redis sessions
 func (this *RedisMultiplexer) maintainConnectionStates() {
 	var m runtime.MemStats
 	for this.active {

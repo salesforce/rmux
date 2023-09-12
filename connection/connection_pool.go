@@ -124,7 +124,7 @@ func (cp *ConnectionPool) getDiagnosticConnection() (connection *Connection, err
 	cp.diagnosticConnectionLock.Lock()
 
 	if err := cp.diagnosticConnection.ReconnectIfNecessary(); err != nil {
-		log.Error("The diangnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
+		log.Error("The diagnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
 		cp.diagnosticConnectionLock.Unlock()
 		return nil, err
 	}
@@ -157,6 +157,7 @@ func (cp *ConnectionPool) IsConnected() bool {
 
 // Checks the state of connections in this connection pool
 // If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
+// This is only used for diagnostic connections!
 func (cp *ConnectionPool) CheckConnectionState() (isUp bool) {
 	isUp = true
 	defer func() {
@@ -169,12 +170,6 @@ func (cp *ConnectionPool) CheckConnectionState() (isUp bool) {
 		return
 	}
 	defer cp.releaseDiagnosticConnection()
-
-	//If we failed to bind, or if our PING fails, the pool is down
-	if connection == nil || connection.connection == nil {
-		isUp = false
-		return
-	}
 
 	if !connection.CheckConnection() {
 		connection.Disconnect()

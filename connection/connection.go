@@ -134,6 +134,7 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 
 // Checks if the current connection is up or not
 // If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
+// This is only used for diagnostic connections!
 func (myConnection *Connection) CheckConnection() bool {
 	if myConnection.connection == nil {
 		return false
@@ -147,7 +148,8 @@ func (myConnection *Connection) CheckConnection() bool {
 	startWrite := time.Now()
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
-		log.Error("CheckConnection: Could not write PING Err:%s Timing:%s", err, time.Now().Sub(startWrite))
+		log.Error("CheckConnection: Could not write PING on diagnostics connection. Err:%s Timing:%s",
+			err, time.Now().Sub(startWrite))
 		myConnection.Disconnect()
 		return false
 	}
@@ -159,11 +161,12 @@ func (myConnection *Connection) CheckConnection() bool {
 		return true
 	} else {
 		if err != nil {
-			log.Error("CheckConnection: Could not read PING. Error: %s Timing:%s", err, time.Now().Sub(startRead))
+			log.Error("CheckConnection: Could not read PING on diagnostics connection. Error: %s Timing:%s",
+				err, time.Now().Sub(startRead))
 		} else if isPrefix {
-			log.Error("CheckConnection: ReadLine returned prefix: %q", line)
+			log.Error("CheckConnection: ReadLine returned prefix on diagnostics connection: %q", line)
 		} else {
-			log.Error("CheckConnection: Expected PONG response. Got: %q", line)
+			log.Error("CheckConnection: Expected PONG response on diagnostics connection. Got: %q", line)
 		}
 		myConnection.Disconnect()
 		return false
