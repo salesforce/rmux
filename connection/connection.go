@@ -192,7 +192,9 @@ func (c *Connection) IsConnected() bool {
 	}
 
 	if n != 0 {
+		// If we get stuff back here, the connection is most likely unusable at this point
 		log.Warn("Got %d bytes back when we expected 0.", n)
+		return false
 	}
 
 	return true
