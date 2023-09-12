@@ -417,7 +417,7 @@ func WriteLine(line []byte, destination *writer.FlexibleWriter, flush bool) (err
 
 // Copies a server response from the remoteBuffer into your localBuffer
 // If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(reader *bufio.Reader, localBuffer *writer.FlexibleWriter, numResponses int) (err error) {
+func CopyServerResponses(reader *bufio.Reader, localBuffer *writer.FlexibleWriter, numResponses int) error {
 	//start := time.Now()
 	//defer func() {
 	//	graphite.Timing("copy_server_responses", time.Now().Sub(start))
@@ -433,16 +433,12 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *writer.FlexibleWrite
 		numRead++
 	}
 
-	if numRead < numResponses {
-		return io.EOF
-	}
-
 	if sErr := scanner.Err(); sErr != nil {
 		return sErr
 	}
 
-	if err != nil {
-		return err
+	if numRead < numResponses {
+		return io.EOF
 	}
 
 	return nil
