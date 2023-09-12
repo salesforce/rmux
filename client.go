@@ -182,26 +182,25 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 	}
 
 	defer func() {
+		if err != nil {
+			// Force upstream disconnect on any error
+			redisConn.Disconnect()
+		}
+
 		if this.transactionMode == transactionModeNone {
-			// We are not in a transaction, so we can simply recycle it
-			connectionPool.RecycleRemoteConnection(redisConn)
-
-			if this.reservedRedisConn != nil {
-				this.reservedRedisConn = nil
-
-			}
 			if this.transactionDoneChannel != nil {
+				// If there was a transaction going on, we need to stop it, which will recycle the connection
 				close(this.transactionDoneChannel)
-				this.transactionDoneChannel = nil
+			} else {
+				// We are not in a transaction, so we can simply recycle it
+				connectionPool.RecycleRemoteConnection(redisConn)
 			}
 		} else {
 			// We are currently in a transaction
 			if err != nil {
 				// Reset client and server connection as we can not recover from any error states
 				this.ReadChannel <- readItem{nil, err}
-				redisConn.Disconnect()
 				close(this.transactionDoneChannel)
-				connectionPool.RecycleRemoteConnection(redisConn)
 			} else if this.reservedRedisConn == nil {
 				this.reservedRedisConn = redisConn
 				this.transactionDoneChannel = make(chan interface{}, 1)
@@ -211,8 +210,10 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 					case <-time.After(this.TransactionTimeout):
 						this.ReadChannel <- readItem{nil, ERR_TRANSACTION_TIMEOUT}
 						redisConn.Disconnect()
-						connectionPool.RecycleRemoteConnection(redisConn)
 					}
+					this.transactionDoneChannel = nil
+					this.reservedRedisConn = nil
+					connectionPool.RecycleRemoteConnection(redisConn)
 				}()
 			}
 		}
@@ -220,8 +221,6 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 
 	if redisConn.DatabaseId != this.DatabaseId {
 		if err = redisConn.SelectDatabase(this.DatabaseId); err != nil {
-			// Disconnect the current connection if selecting failed, will auto-reconnect this connection holder when queried later
-			redisConn.Disconnect()
 			return
 		}
 	}
@@ -235,7 +234,6 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 		_, err = redisConn.Writer.Write(command.GetBuffer())
 		if err != nil {
 			log.Error("Error when writing to server: %s. Disconnecting the connection.", err)
-			redisConn.Disconnect()
 			return
 		}
 	}
@@ -244,7 +242,6 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 		err = redisConn.Writer.Flush()
 		if err != nil {
 			log.Error("Error when flushing to server: %s. Disconnecting the connection.", err)
-			redisConn.Disconnect()
 			return
 		}
 	}
@@ -253,7 +250,6 @@ func (this *Client) FlushRedisAndRespond() (err error) {
 
 	if err = protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
 		log.Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)
-		redisConn.Disconnect()
 		this.ReadChannel <- readItem{nil, err}
 		return
 	}
