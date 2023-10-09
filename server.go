@@ -241,6 +241,11 @@ func (this *RedisMultiplexer) initializeClient(localConnection net.Conn) {
 		myClient.Connection.Close()
 	}()
 
+	if this.activeConnectionCount < 1 {
+		protocol.WriteError([]byte("No Redis server available"), myClient.Writer, true)
+		return
+	}
+
 	this.HandleClientRequests(myClient)
 }
 
