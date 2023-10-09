@@ -160,6 +160,7 @@ func (this *Client) FlushRedisAndRespond() error {
 	if redisConn.DatabaseId != this.DatabaseId {
 		if err := redisConn.SelectDatabase(this.DatabaseId); err != nil {
 			// Disconnect the current connection if selecting failed, will auto-reconnect this connection holder when queried later
+			log.Error("Select database failed: %s", err)
 			redisConn.Disconnect()
 			return err
 		}

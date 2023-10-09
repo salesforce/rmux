@@ -94,7 +94,6 @@ func (c *Connection) ReconnectIfNecessary() (err error) {
 
 	c.connection, err = net.DialTimeout(c.protocol, c.endpoint, c.connectTimeout)
 	if err != nil {
-		log.Error("NewConnection: Error received from dial: %s", err)
 		c.connection = nil
 		return err
 	}
@@ -113,16 +112,14 @@ func (c *Connection) ReconnectIfNecessary() (err error) {
 // Selects the given database, for the connection
 // If an error is returned, or if an invalid response is returned from the select, then this will return an error
 // If not, the connections internal database will be updated accordingly
-func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
+func (this *Connection) SelectDatabase(DatabaseId int) error {
 	if this.connection == nil {
-		log.Error("SelectDatabase: Selecting on invalid connection")
-		return errors.New("Selecting database on an invalid connection")
+		return errors.New("selecting database on an invalid connection")
 	}
 
-	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
+	err := protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
 	if err != nil {
-		log.Error("SelectDatabase: Error received from protocol.FlushLine: %s", err)
-		return err
+		return fmt.Errorf("flush line failed: %w", err)
 	}
 
 	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
@@ -130,13 +127,12 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 			err = errors.New("unknown ReadLine error")
 		}
 
-		log.Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 		this.Disconnect()
-		return errors.New("Invalid select response")
+		return fmt.Errorf("invalid select database response: err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 	}
 
 	this.DatabaseId = DatabaseId
-	return
+	return nil
 }
 
 // Checks if the current connection is up or not
