@@ -26,6 +26,7 @@
 package connection
 
 import (
+	"errors"
 	"rmux/graphite"
 	"rmux/log"
 	"strings"
@@ -111,7 +112,8 @@ func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 		}
 
 		return connection, nil
-		// TODO: Maybe a while/timeout/graphiteping loop?
+	case <-time.After(1 * time.Second):
+		return nil, errors.New("timeout while waiting for a new connection")
 	}
 }
 
