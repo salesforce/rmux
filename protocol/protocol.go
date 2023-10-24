@@ -27,8 +27,8 @@ package protocol
 
 import (
 	"bufio"
-	. "github.com/salesforce/rmux/writer"
 	"io"
+	"rmux/writer"
 )
 
 const (
@@ -59,6 +59,11 @@ var (
 	SHORT_PING_COMMAND  = []byte("PING")
 	SELECT_COMMAND      = []byte("select")
 	QUIT_COMMAND        = []byte("quit")
+	WATCH_COMMAND       = []byte("watch")
+	UNWATCH_COMMAND     = []byte("unwatch")
+	MULTI_COMMAND       = []byte("multi")
+	EXEC_COMMAND        = []byte("exec")
+	DISCARD_COMMAND     = []byte("discard")
 
 	//Responses declared once for convenience
 	OK_RESPONSE   = []byte("+OK")
@@ -77,14 +82,11 @@ var (
 		"client":       true,
 		"config":       true,
 		"dbsize":       true,
-		"discard":      true,
 		"debug":        true,
-		"exec":         true,
 		"lastsave":     true,
 		"move":         true,
 		"monitor":      true,
 		"migrate":      true,
-		"multi":        true,
 		"object":       true,
 		"punsubscribe": true,
 		"psubscribe":   true,
@@ -98,8 +100,6 @@ var (
 		"sync":         true,
 		"time":         true,
 		"unsubscribe":  true,
-		"unwatch":      true,
-		"watch":        true,
 	}
 
 	//These functions will only work if multiplexing is disabled.
@@ -107,13 +107,16 @@ var (
 	SINGLE_DB_FUNCTIONS = map[string]bool{
 		"bitop":       true,
 		"brpoplpush":  true,
+		"discard":     true,
 		"eval":        true,
+		"exec":        true,
 		"keys":        true,
 		"flushall":    true,
 		"flushdb":     true,
 		"mget":        true,
 		"mset":        true,
 		"msetnx":      true,
+		"multi":       true,
 		"rename":      true,
 		"renamenx":    true,
 		"rpoplpush":   true,
@@ -124,6 +127,8 @@ var (
 		"sinterstore": true,
 		"smove":       true,
 		"sunion":      true,
+		"unwatch":     true,
+		"watch":       true,
 		"sunionstore": true,
 		"zinterstore": true,
 		"zunionstore": true,
@@ -138,8 +143,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		if command[2] == 'l' && isMultipleArgument {
 			return false
 		}
+		//supported if multiplexing is disabled: discard
+		if command[1] == 'i' {
+			return !isMultiplexing
+		}
 		//supported: decr, decrby, del, dump
-		//unsupported: debug, dbsize, discard
+		//unsupported: debug, dbsize
 		return (command[1] == 'e' || command[1] == 'u') && command[2] != 'b'
 	} else if command[0] == 'g' {
 		//supported: get, getbit, getrange, getset
@@ -257,11 +266,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//supported: time, ttl, type
 		return true
 	} else if command[0] == 'u' {
-		//unsupported: unsubscribe, unwatch
-		return false
+		//supported if multiplexing is disabled: unwatch
+		//unsupported: unsubscribe
+		return command[2] == 'w' && !isMultiplexing
 	} else if command[0] == 'w' {
-		//unsupported: watch
-		return false
+		//supported if not multiplexing: watch
+		return !isMultiplexing
 	} else if command[0] == 'a' {
 		//supported: append
 		//unsupported: auth
@@ -280,9 +290,9 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//unsupported: client, config
 		return false
 	} else if command[0] == 'e' {
-		//unsupported: exec
+		//supported if multiplexing is disabled: exec
 		if command[2] == 'e' {
-			return false
+			return !isMultiplexing
 		}
 		//supported: echo, exists, expire, expireat
 		//supported if not multiplexing: eval, evalsha
@@ -294,24 +304,24 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 		//supported if not multiplexing: keys
 		return !isMultiplexing
 	} else if command[0] == 'm' {
-		//supported if not multiplexing: mget, mset, msetnx
-		//unsupported: move, monitor, migrate, multi
+		//supported if not multiplexing: mget, mset, msetnx, multi
+		//unsupported: move, monitor, migrate
 		if isMultiplexing {
 			return false
 		}
-		return command[1] == 'g' || command[1] == 's'
+		return command[1] == 'g' || command[1] == 's' || command[1] == 'u'
 	} else if command[0] == 'o' {
 		return false
 	}
 	return false
 }
 
-//Parses a string into an int.
-//Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
-//Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
+// Parses a string into an int.
+// Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
+// Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
 func ParseInt(response []byte) (value int, err error) {
 	if len(response) == 0 {
-//		Debug("ParseInt: Zero-length int")
+		//		Debug("ParseInt: Zero-length int")
 		err = ERROR_INVALID_INT
 		return
 	}
@@ -329,7 +339,7 @@ func ParseInt(response []byte) (value int, err error) {
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
 		if b > 9 {
-//			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
+			//			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
 			err = ERROR_INVALID_INT
 			return
 		}
@@ -370,18 +380,18 @@ func ParseCommand(b []byte) (command Command, err error) {
 	return
 }
 
-//Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
-//Bubbles any errors from underlying writer
-func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
+// Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
+// Bubbles any errors from underlying writer
+func WriteError(line []byte, dest *writer.FlexibleWriter, flush bool) (err error) {
 	_, err = dest.Write([]byte("-ERR "))
 	if err != nil {
-//		Debug("WriteError: Error received from write: %s", err)
+		//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
 	err = WriteLine(line, dest, flush)
 	if err != nil {
-//		Debug("WriteError: Error received from write: %s", err)
+		//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
@@ -392,19 +402,19 @@ func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
 	return
 }
 
-//Writes the given line to the buffer, followed by a GO_NEWLINE
-//Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
-func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error) {
+// Writes the given line to the buffer, followed by a GO_NEWLINE
+// Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
+func WriteLine(line []byte, destination *writer.FlexibleWriter, flush bool) (err error) {
 	// startTime := time.Now()
 	_, err = destination.Write(line)
 	if err != nil {
-//		Debug("writeLine: Error received from write: %s", err)
+		//		Debug("writeLine: Error received from write: %s", err)
 		return
 	}
 
 	_, err = destination.Write(REDIS_NEWLINE)
 	if err != nil {
-//		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
+		//		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
 		return
 	}
 
@@ -415,9 +425,9 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 	return
 }
 
-//Copies a server response from the remoteBuffer into your localBuffer
-//If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
+// Copies a server response from the remoteBuffer into your localBuffer
+// If a protocol or buffer error is encountered, it is bubbled up
+func CopyServerResponses(reader *bufio.Reader, localBuffer *writer.FlexibleWriter, numResponses int) (err error) {
 	//start := time.Now()
 	//defer func() {
 	//	graphite.Timing("copy_server_responses", time.Now().Sub(start))
@@ -427,7 +437,7 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 
 	numRead := 0
 
-	for ; numRead < numResponses && scanner.Scan(); {
+	for numRead < numResponses && scanner.Scan() {
 		localBuffer.Write(scanner.Bytes())
 		localBuffer.Flush()
 		numRead++

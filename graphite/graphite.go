@@ -26,11 +26,11 @@
 package graphite
 
 import (
-	"os"
-	"net"
 	"fmt"
-	"strings"
+	"net"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -51,7 +51,7 @@ func SetEndpoint(endpoint string) error {
 	// replace any dots in the hostname with dashes
 	hostname = strings.Replace(hostname, ".", "-", -1)
 
-	conn, err := net.DialUDP("udp", nil, addr);
+	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
 		return err
 	}

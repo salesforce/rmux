@@ -28,7 +28,7 @@ package protocol
 import (
 	"bufio"
 	"bytes"
-	"github.com/salesforce/rmux/writer"
+	"rmux/writer"
 	"strings"
 	"testing"
 )
@@ -184,12 +184,12 @@ var testDataAllRedisCommands = []struct {
 	{"decr", true, true},
 	{"decrby", true, true},
 	{"del", true, true},
-	{"discard", false, false}, // dont support transactions
+	{"discard", false, true},
 	{"dump", true, true},
 	{"echo", true, true},
 	{"eval", false, true}, // can operate on several keys
 	{"evalsha", false, true},
-	{"exec", false, false},
+	{"exec", false, true},
 	{"exists", true, true},
 	{"expireat", true, true},
 	{"flushall", false, true},
@@ -232,8 +232,8 @@ var testDataAllRedisCommands = []struct {
 	{"monitor", false, false}, // system related operation - dangerous
 	{"move", false, false},    // moves between dbs, let's not support
 	{"mset", false, true},     // should operate on multiple keys
-	{"multi", false, false},   // transaction related
-	{"object", false, false},  // to inspect internals
+	{"multi", false, true},
+	{"object", false, false}, // to inspect internals
 	{"persist", true, true},
 	{"pexpire", true, true},
 	{"pexpireat", true, true},
@@ -290,8 +290,8 @@ var testDataAllRedisCommands = []struct {
 	{"ttl", true, true},
 	{"type", true, true},
 	{"unsubscribe", false, false},
-	{"unwatch", false, false}, // transaction related
-	{"watch", false, false},   // transaction related
+	{"unwatch", false, true},
+	{"watch", false, true},
 	{"zadd", true, true},
 	{"zcard", true, true},
 	{"zcount", true, true},
