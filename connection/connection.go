@@ -30,16 +30,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	. "github.com/salesforce/rmux/log"
-	"github.com/salesforce/rmux/protocol"
-	. "github.com/salesforce/rmux/writer"
 	"net"
+	"rmux/graphite"
+	"rmux/log"
+	"rmux/protocol"
+	"rmux/writer"
 	"time"
-	"github.com/salesforce/rmux/graphite"
 )
 
-//An outbound connection to a redis server
-//Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
+// An outbound connection to a redis server
+// Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
 type Connection struct {
 	connection net.Conn
 	//The database that we are currently connected to
@@ -47,31 +47,35 @@ type Connection struct {
 	// The reader from the redis server
 	Reader *bufio.Reader
 	// The writer to the redis server
-	Writer *FlexibleWriter
+	Writer *writer.FlexibleWriter
 
-	protocol string
-	endpoint string
-	connectTimeout time.Duration
-	readTimeout time.Duration
-	writeTimeout time.Duration
+	protocol          string
+	endpoint          string
+	connectTimeout    time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	reconnectInterval time.Duration
+	nextReconnect     time.Time
 }
 
-//Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
-//ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
-func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) *Connection {
+// Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
+// ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
+func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration,
+	reconnectInterval time.Duration) *Connection {
 	c := &Connection{}
 	c.protocol = Protocol
 	c.endpoint = Endpoint
 	c.connectTimeout = ConnectTimeout
 	c.readTimeout = ReadTimeout
 	c.writeTimeout = WriteTimeout
+	c.reconnectInterval = reconnectInterval
 	return c
 }
 
 func (c *Connection) Disconnect() {
 	if c.connection != nil {
 		c.connection.Close()
-		Info("Disconnected a connection")
+		log.Debug("Disconnected a connection")
 		graphite.Increment("disconnect")
 	}
 	c.connection = nil
@@ -81,7 +85,7 @@ func (c *Connection) Disconnect() {
 }
 
 func (c *Connection) ReconnectIfNecessary() (err error) {
-	if c.IsConnected() {
+	if c.IsConnected() && time.Now().Before(c.nextReconnect) {
 		return nil
 	}
 
@@ -90,32 +94,32 @@ func (c *Connection) ReconnectIfNecessary() (err error) {
 
 	c.connection, err = net.DialTimeout(c.protocol, c.endpoint, c.connectTimeout)
 	if err != nil {
-		Error("NewConnection: Error received from dial: %s", err)
 		c.connection = nil
 		return err
 	}
 
 	netReadWriter := protocol.NewTimedNetReadWriter(c.connection, c.readTimeout, c.writeTimeout)
 	c.DatabaseId = 0
-	c.Writer = NewFlexibleWriter(netReadWriter)
+	c.Writer = writer.NewFlexibleWriter(netReadWriter)
 	c.Reader = bufio.NewReader(netReadWriter)
+
+	c.nextReconnect = time.Now().Add(c.reconnectInterval)
+	log.Debug("Connected a connection")
 
 	return nil
 }
 
-//Selects the given database, for the connection
-//If an error is returned, or if an invalid response is returned from the select, then this will return an error
-//If not, the connections internal database will be updated accordingly
-func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
+// Selects the given database, for the connection
+// If an error is returned, or if an invalid response is returned from the select, then this will return an error
+// If not, the connections internal database will be updated accordingly
+func (this *Connection) SelectDatabase(DatabaseId int) error {
 	if this.connection == nil {
-		Error("SelectDatabase: Selecting on invalid connection")
-		return errors.New("Selecting database on an invalid connection")
+		return errors.New("selecting database on an invalid connection")
 	}
 
-	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
+	err := protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
 	if err != nil {
-		Error("SelectDatabase: Error received from protocol.FlushLine: %s", err)
-		return err
+		return fmt.Errorf("flush line failed: %w", err)
 	}
 
 	if line, isPrefix, err := this.Reader.ReadLine(); err != nil || isPrefix || !bytes.Equal(line, protocol.OK_RESPONSE) {
@@ -123,17 +127,17 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 			err = errors.New("unknown ReadLine error")
 		}
 
-		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 		this.Disconnect()
-		return errors.New("Invalid select response")
+		return fmt.Errorf("invalid select database response: err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 	}
 
 	this.DatabaseId = DatabaseId
-	return
+	return nil
 }
 
-//Checks if the current connection is up or not
-//If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
+// Checks if the current connection is up or not
+// If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
+// This is only used for diagnostic connections!
 func (myConnection *Connection) CheckConnection() bool {
 	if myConnection.connection == nil {
 		return false
@@ -147,7 +151,8 @@ func (myConnection *Connection) CheckConnection() bool {
 	startWrite := time.Now()
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
-		Error("CheckConnection: Could not write PING Err:%s Timing:%s", err, time.Now().Sub(startWrite))
+		log.Error("CheckConnection: Could not write PING on diagnostics connection. Err:%s Timing:%s",
+			err, time.Now().Sub(startWrite))
 		myConnection.Disconnect()
 		return false
 	}
@@ -159,11 +164,12 @@ func (myConnection *Connection) CheckConnection() bool {
 		return true
 	} else {
 		if err != nil {
-			Error("CheckConnection: Could not read PING. Error: %s Timing:%s", err, time.Now().Sub(startRead))
+			log.Error("CheckConnection: Could not read PING on diagnostics connection. Error: %s Timing:%s",
+				err, time.Now().Sub(startRead))
 		} else if isPrefix {
-			Error("CheckConnection: ReadLine returned prefix: %q", line)
+			log.Error("CheckConnection: ReadLine returned prefix on diagnostics connection: %q", line)
 		} else {
-			Error("CheckConnection: Expected PONG response. Got: %q", line)
+			log.Error("CheckConnection: Expected PONG response on diagnostics connection. Got: %q", line)
 		}
 		myConnection.Disconnect()
 		return false
@@ -187,12 +193,14 @@ func (c *Connection) IsConnected() bool {
 			}
 		}
 
-		Info("There was an error when checking the connection (%s), will reconnect the connection", err)
+		log.Info("There was an error when checking the connection (%s), will reconnect the connection", err)
 		return false
 	}
 
 	if n != 0 {
-		Warn("Got %d bytes back when we expected 0.", n)
+		// If we get stuff back here, the connection is most likely unusable at this point
+		log.Warn("Got %d bytes back when we expected 0.", n)
+		return false
 	}
 
 	return true

@@ -25,7 +25,7 @@
 
 package protocol
 
-//Represents a redis client that is connected to our rmux server
+// Represents a redis client that is connected to our rmux server
 type Command interface {
 	GetCommand() []byte
 	GetBuffer() []byte

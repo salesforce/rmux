@@ -31,7 +31,7 @@ import (
 
 func ScanResp(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	//	if len(data) > 0 {
-//	//		Debug("Scanning %q", data)
+	//		Debug("Scanning %q", data)
 	//	}
 
 	if atEOF && len(data) == 0 {
@@ -203,7 +203,7 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return 0, nil, err
 	} else if advance == 0 || token == nil || len(token) < 3 {
 		if len(token) < 3 && len(token) > 0 {
-//			Debug("Hm. %q", token)
+			// Debug("Hm. %q", token)
 		}
 		// Asking for more data
 		return 0, nil, nil
@@ -238,4 +238,3 @@ func ScanArray(data []byte, atEOF bool) (advance int, token []byte, err error) {
 
 	return s, data[:s], nil
 }
-

@@ -27,8 +27,8 @@ package protocol
 
 import (
 	"bufio"
-	. "github.com/salesforce/rmux/writer"
 	"io"
+	"rmux/writer"
 )
 
 const (
@@ -306,12 +306,12 @@ func IsSupportedFunction(command []byte, isMultiplexing, isMultipleArgument bool
 	return false
 }
 
-//Parses a string into an int.
-//Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
-//Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
+// Parses a string into an int.
+// Differs from atoi in that this only parses positive dec ints--hex, octal, and negatives are not allowed
+// Upon invalid character received, a PANIC_INVALID_INT is caught and err'd
 func ParseInt(response []byte) (value int, err error) {
 	if len(response) == 0 {
-//		Debug("ParseInt: Zero-length int")
+		//		Debug("ParseInt: Zero-length int")
 		err = ERROR_INVALID_INT
 		return
 	}
@@ -329,7 +329,7 @@ func ParseInt(response []byte) (value int, err error) {
 		b = b - '0'
 		//Since we know we have a positive value, we can now do this single check
 		if b > 9 {
-//			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
+			//			Debug("ParseInt: Invalid int character: %q when parsing %q", b+'0', response)
 			err = ERROR_INVALID_INT
 			return
 		}
@@ -370,18 +370,18 @@ func ParseCommand(b []byte) (command Command, err error) {
 	return
 }
 
-//Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
-//Bubbles any errors from underlying writer
-func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
+// Writes the given error to the buffer, preceded by a '-' and followed by a GO_NEWLINE
+// Bubbles any errors from underlying writer
+func WriteError(line []byte, dest *writer.FlexibleWriter, flush bool) (err error) {
 	_, err = dest.Write([]byte("-ERR "))
 	if err != nil {
-//		Debug("WriteError: Error received from write: %s", err)
+		//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
 	err = WriteLine(line, dest, flush)
 	if err != nil {
-//		Debug("WriteError: Error received from write: %s", err)
+		//		Debug("WriteError: Error received from write: %s", err)
 		return err
 	}
 
@@ -392,19 +392,19 @@ func WriteError(line []byte, dest *FlexibleWriter, flush bool) (err error) {
 	return
 }
 
-//Writes the given line to the buffer, followed by a GO_NEWLINE
-//Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
-func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error) {
+// Writes the given line to the buffer, followed by a GO_NEWLINE
+// Does not explicitly flush the buffer.  Final lines in a sequence should be followed by FlushLine
+func WriteLine(line []byte, destination *writer.FlexibleWriter, flush bool) (err error) {
 	// startTime := time.Now()
 	_, err = destination.Write(line)
 	if err != nil {
-//		Debug("writeLine: Error received from write: %s", err)
+		//		Debug("writeLine: Error received from write: %s", err)
 		return
 	}
 
 	_, err = destination.Write(REDIS_NEWLINE)
 	if err != nil {
-//		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
+		//		Debug("writeLine: Error received from writing GO_NEWLINE: %s", err)
 		return
 	}
 
@@ -415,9 +415,9 @@ func WriteLine(line []byte, destination *FlexibleWriter, flush bool) (err error)
 	return
 }
 
-//Copies a server response from the remoteBuffer into your localBuffer
-//If a protocol or buffer error is encountered, it is bubbled up
-func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numResponses int) (err error) {
+// Copies a server response from the remoteBuffer into your localBuffer
+// If a protocol or buffer error is encountered, it is bubbled up
+func CopyServerResponses(reader *bufio.Reader, localBuffer *writer.FlexibleWriter, numResponses int) error {
 	//start := time.Now()
 	//defer func() {
 	//	graphite.Timing("copy_server_responses", time.Now().Sub(start))
@@ -427,22 +427,18 @@ func CopyServerResponses(reader *bufio.Reader, localBuffer *FlexibleWriter, numR
 
 	numRead := 0
 
-	for ; numRead < numResponses && scanner.Scan(); {
+	for numRead < numResponses && scanner.Scan() {
 		localBuffer.Write(scanner.Bytes())
 		localBuffer.Flush()
 		numRead++
-	}
-
-	if numRead < numResponses {
-		return io.EOF
 	}
 
 	if sErr := scanner.Err(); sErr != nil {
 		return sErr
 	}
 
-	if err != nil {
-		return err
+	if numRead < numResponses {
+		return io.EOF
 	}
 
 	return nil
