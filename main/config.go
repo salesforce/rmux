@@ -38,14 +38,14 @@ type PoolConfig struct {
 	PoolSize             int      `json:"poolSize"`
 	TcpConnections       []string `json:"tcpConnections"`
 	UnixConnections      []string `json:"unixConnections"`
-	LocalTimeout         int64      `json:"localTimeout"`
-	LocalReadTimeout     int64      `json:"localReadTimeout"`
-	LocalWriteTimeout    int64      `json:"localWriteTimeout"`
-	RemoteTimeout        int64      `json:"remoteTimeout"`
-	RemoteReadTimeout    int64      `json:"remoteReadTimeout"`
-	RemoteWriteTimeout   int64      `json:"remoteWriteTimeout"`
-	RemoteConnectTimeout int64      `json:"remoteConnectTimeout"`
-	Failover             bool       `json:"failover"`
+	LocalTimeout         int64    `json:"localTimeout"`
+	LocalReadTimeout     int64    `json:"localReadTimeout"`
+	LocalWriteTimeout    int64    `json:"localWriteTimeout"`
+	RemoteTimeout        int64    `json:"remoteTimeout"`
+	RemoteReadTimeout    int64    `json:"remoteReadTimeout"`
+	RemoteWriteTimeout   int64    `json:"remoteWriteTimeout"`
+	RemoteConnectTimeout int64    `json:"remoteConnectTimeout"`
+	Failover             bool     `json:"failover"`
 }
 
 func ReadConfigFromFile(configFile string) ([]PoolConfig, error) {
