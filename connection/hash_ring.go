@@ -27,14 +27,13 @@ package connection
 
 import (
 	"errors"
-//	. "github.com/salesforce/rmux/log"
-	"github.com/salesforce/rmux/protocol"
+	"rmux/protocol"
 )
 
 var ERR_HASHRING_DOWN = errors.New("Hash ring is down")
 
-//An outbound connection to a redis server
-//Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
+// An outbound connection to a redis server
+// Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
 type HashRing struct {
 	//The connection pools that we will be hashing our connections to
 	ConnectionPools []*ConnectionPool
@@ -56,11 +55,11 @@ func NewHashRing(connectionPools []*ConnectionPool, failover bool) (newHashRing 
 	if err != nil {
 		return
 	}
-//	Debug("Making a hash ring for prime %v", prime)
+	//	Debug("Making a hash ring for prime %v", prime)
 	newHashRing.Failover = failover
 	newHashRing.setBitMask(prime)
 	newHashRing.ConnectionPools = make([]*ConnectionPool, newHashRing.BitMask+1)
-//	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
+	//	Debug("Made a set of connection pools of size %v", len(newHashRing.ConnectionPools))
 
 	newHashRing.distributeConnectionPools(prime, connectionPools)
 	return
@@ -105,8 +104,8 @@ func (myHashRing *HashRing) setBitMask(prime int) {
 	myHashRing.BitMask = myHashRing.BitMask - 1
 }
 
-//Gets the connectionKey, for a to-be-multiplexed command
-//Uses the bernstein hash, which is one of the fastest key-distribution algorithms out there
+// Gets the connectionKey, for a to-be-multiplexed command
+// Uses the bernstein hash, which is one of the fastest key-distribution algorithms out there
 func (myHashRing *HashRing) GetConnectionPool(command protocol.Command) (connectionPool *ConnectionPool, err error) {
 	var hash uint32 = 0
 	if command.GetArgCount() > 0 {

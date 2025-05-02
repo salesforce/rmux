@@ -52,7 +52,7 @@ func SetLogLevel(level int) {
 	_level = level
 }
 
-func UseSyslog(useSyslog bool)  {
+func UseSyslog(useSyslog bool) {
 	_enableSyslog = useSyslog
 	if useSyslog {
 		var e error

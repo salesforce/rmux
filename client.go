@@ -28,14 +28,14 @@ package rmux
 import (
 	"bytes"
 	"errors"
-	"github.com/salesforce/rmux/connection"
-	. "github.com/salesforce/rmux/log"
-	"github.com/salesforce/rmux/protocol"
-	. "github.com/salesforce/rmux/writer"
 	"io"
 	"net"
+	"rmux/connection"
+	"rmux/graphite"
+	"rmux/log"
+	"rmux/protocol"
+	"rmux/writer"
 	"time"
-	"github.com/salesforce/rmux/graphite"
 )
 
 type readItem struct {
@@ -43,10 +43,10 @@ type readItem struct {
 	err     error
 }
 
-//Represents a redis client that is connected to our rmux server
+// Represents a redis client that is connected to our rmux server
 type Client struct {
 	//The underlying ReadWriter for this connection
-	Writer *FlexibleWriter
+	Writer *writer.FlexibleWriter
 	//Whether or not this client needs to consider multiplexing
 	Multiplexing bool
 	Connection   net.Conn
@@ -54,24 +54,43 @@ type Client struct {
 	DatabaseId int
 	//Whether or not this client connection is active or not
 	//Upon QUIT command, this gets toggled off
-	Active      bool
-	ReadChannel chan readItem
-	HashRing    *connection.HashRing
-	queued      []protocol.Command
-	Scanner     *protocol.RespScanner
+	Active                 bool
+	ReadChannel            chan readItem
+	HashRing               *connection.HashRing
+	Scanner                *protocol.RespScanner
+	TransactionTimeout     time.Duration
+	queued                 []protocol.Command
+	reservedRedisConn      chan *connection.Connection
+	transactionMode        transactionMode
+	transactionDoneChannel chan interface{}
 }
 
+// Represents the connection transaction mode of this client / connection
+type transactionMode byte
+
 var (
-	ERR_QUIT            = errors.New("Client asked to quit")
-	ERR_CONNECTION_DOWN = errors.New(string(CONNECTION_DOWN_RESPONSE))
-	ERR_TIMEOUT         = errors.New("Proxy timeout")
+	ERR_QUIT                = errors.New("Client asked to quit")
+	ERR_CONNECTION_DOWN     = errors.New(string(CONNECTION_DOWN_RESPONSE))
+	ERR_TIMEOUT             = errors.New("Proxy timeout")
+	ERR_TRANSACTION_TIMEOUT = errors.New("Transaction timeout")
 )
 
-//Initializes a new client, for the given established net connection, with the specified read/write timeouts
-func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isMuliplexing bool, hashRing *connection.HashRing) (newClient *Client) {
+const (
+	//Default transaction timeout, for clients. Can be adjusted on individual clients after initialization
+	EXTERN_TRANSACTION_TIMEOUT = time.Millisecond * 500
+
+	transactionModeNone transactionMode = iota
+	transactionModePre
+	transactionModeMulti
+)
+
+// Initializes a new client, for the given established net connection, with the specified read/write timeouts
+func NewClient(connection net.Conn, isMuliplexing bool, hashRing *connection.HashRing,
+	transactionTimeout time.Duration) (newClient *Client) {
+
 	newClient = &Client{}
 	newClient.Connection = connection
-	newClient.Writer = NewFlexibleWriter(connection)
+	newClient.Writer = writer.NewFlexibleWriter(connection)
 	newClient.Active = true
 	newClient.Multiplexing = isMuliplexing
 	newClient.ReadChannel = make(chan readItem, 10000)
@@ -79,10 +98,12 @@ func NewClient(connection net.Conn, readTimeout, writeTimeout time.Duration, isM
 	newClient.HashRing = hashRing
 	newClient.DatabaseId = 0
 	newClient.Scanner = protocol.NewRespScanner(connection)
+	newClient.TransactionTimeout = transactionTimeout
+	newClient.transactionMode = transactionModeNone
 	return
 }
 
-//Parses the given command
+// Parses the given command
 func (this *Client) ParseCommand(command protocol.Command) ([]byte, error) {
 	//block all unsafe commands
 	if !protocol.IsSupportedFunction(command.GetCommand(), this.Multiplexing, command.GetArgCount() > 2) {
@@ -127,9 +148,7 @@ func (this *Client) FlushLine(line []byte) (err error) {
 }
 
 // Performs the query against the redis server and responds to the connected client with the response from redis.
-func (this *Client) FlushRedisAndRespond() error {
-	var err error
-
+func (this *Client) FlushRedisAndRespond() (err error) {
 	if !this.HasQueued() {
 		return this.Writer.Flush()
 	}
@@ -143,25 +162,60 @@ func (this *Client) FlushRedisAndRespond() error {
 		}
 		connectionPool, err = this.HashRing.GetConnectionPool(this.queued[0])
 		if err != nil {
-			Error("Failed to retrieve a connection pool from the hashring")
+			log.Error("Failed to retrieve a connection pool from the hashring")
 			this.ReadChannel <- readItem{nil, err}
-			return err
+			return
 		}
 	}
 
-	redisConn, err := connectionPool.GetConnection()
-	if err != nil {
-		Error("Failed to retrieve an active connection from the provided connection pool")
-		this.ReadChannel <- readItem{nil, ERR_CONNECTION_DOWN}
-		return ERR_CONNECTION_DOWN
+	var redisConn *connection.Connection
+
+	if this.reservedRedisConn != nil {
+		// Wait for the reserved connection to be available
+		redisConn = <-this.reservedRedisConn
+		if redisConn == nil {
+			// Check if a transaction timeout handler closed the channel and report to the client
+			this.ReadChannel <- readItem{nil, ERR_TRANSACTION_TIMEOUT}
+			return ERR_TRANSACTION_TIMEOUT
+		}
+	} else {
+		redisConn, err = connectionPool.GetConnection()
+		if err != nil {
+			log.Error("Failed to retrieve an active connection from the provided connection pool")
+			this.ReadChannel <- readItem{nil, ERR_CONNECTION_DOWN}
+			return ERR_CONNECTION_DOWN
+		}
 	}
-	defer connectionPool.RecycleRemoteConnection(redisConn)
+
+	defer func() {
+		if err != nil {
+			// In case of an error the upstream and the downstream connection need to be disconnected
+			redisConn.Disconnect()
+			this.ReadChannel <- readItem{nil, err}
+		}
+
+		if this.reservedRedisConn == nil {
+			// In case there is no transaction involved, we can simply recycle the connection
+			connectionPool.RecycleRemoteConnection(redisConn)
+		} else {
+			// Handling for a transaction
+			if err != nil || this.transactionMode == transactionModeNone {
+				// Clean up after a transaction ends
+				close(this.transactionDoneChannel)
+				close(this.reservedRedisConn)
+				this.reservedRedisConn = nil
+				this.transactionDoneChannel = nil
+				connectionPool.RecycleRemoteConnection(redisConn)
+			} else {
+				// Reserve the connection for this client
+				this.reservedRedisConn <- redisConn
+			}
+		}
+	}()
 
 	if redisConn.DatabaseId != this.DatabaseId {
-		if err := redisConn.SelectDatabase(this.DatabaseId); err != nil {
-			// Disconnect the current connection if selecting failed, will auto-reconnect this connection holder when queried later
-			redisConn.Disconnect()
-			return err
+		if err = redisConn.SelectDatabase(this.DatabaseId); err != nil {
+			return
 		}
 	}
 
@@ -170,33 +224,56 @@ func (this *Client) FlushRedisAndRespond() error {
 	startWrite := time.Now()
 
 	for _, command := range this.queued {
-		_, err := redisConn.Writer.Write(command.GetBuffer())
+		this.checkTransactionMode(command)
+		_, err = redisConn.Writer.Write(command.GetBuffer())
 		if err != nil {
-			Error("Error when writing to server: %s. Disconnecting the connection.", err)
-			redisConn.Disconnect()
-			return err
+			log.Error("Error when writing to server: %s. Disconnecting the connection.", err)
+			return
 		}
 	}
 	this.resetQueued()
 	for redisConn.Writer.Buffered() > 0 {
-		err := redisConn.Writer.Flush()
+		err = redisConn.Writer.Flush()
 		if err != nil {
-			Error("Error when flushing to server: %s. Disconnecting the connection.", err)
-			redisConn.Disconnect()
-			return err
+			log.Error("Error when flushing to server: %s. Disconnecting the connection.", err)
+			return
 		}
 	}
 
 	graphite.Timing("redis_write", time.Now().Sub(startWrite))
 
-	if err := protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
-		Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)
-		redisConn.Disconnect()
+	if err = protocol.CopyServerResponses(redisConn.Reader, this.Writer, numCommands); err != nil {
+		log.Error("Error when copying redis responses to client: %s. Disconnecting the connection.", err)
 		this.ReadChannel <- readItem{nil, err}
-		return err
+		return
 	}
 
 	this.Writer.Flush()
+
+	if this.transactionMode != transactionModeNone && this.reservedRedisConn == nil {
+		// A new transaction was started
+		reservedRedisConn := make(chan *connection.Connection, 1)
+		transactionDoneChannel := make(chan interface{}, 1)
+		this.reservedRedisConn = reservedRedisConn
+		this.transactionDoneChannel = transactionDoneChannel
+
+		go func() {
+			select {
+			case <-transactionDoneChannel:
+				// Exit the routine if the transaction has already finished
+			case <-time.After(this.TransactionTimeout):
+				// Handle a transaction timeout, needs to reserve the redis connection to prevent race conditions
+				redisConn = <-reservedRedisConn
+				if redisConn != nil {
+					// Only enforce the timeout if we actually got the connection back
+					close(reservedRedisConn)
+					log.Error("Transaction timed out. Disconnecting the connection.")
+					redisConn.Disconnect()
+					connectionPool.RecycleRemoteConnection(redisConn)
+				}
+			}
+		}()
+	}
 
 	return nil
 }
@@ -231,4 +308,34 @@ func (this *Client) HasQueued() bool {
 
 func (this *Client) Queue(command protocol.Command) {
 	this.queued = append(this.queued, command)
+}
+
+func (this *Client) checkTransactionMode(command protocol.Command) {
+	commandName := command.GetCommand()
+
+	switch this.transactionMode {
+	case transactionModeNone:
+		if bytes.Equal(commandName, protocol.WATCH_COMMAND) {
+			// Enter pre transaction mode when receiving WATCH as this already imposes state on the server connection
+			this.transactionMode = transactionModePre
+		} else if bytes.Equal(commandName, protocol.MULTI_COMMAND) {
+			// Enter actual transaction mode when receiving MULTI
+			this.transactionMode = transactionModeMulti
+		}
+
+	case transactionModePre:
+		if bytes.Equal(commandName, protocol.UNWATCH_COMMAND) {
+			// Exit pre transaction mode when receiving UNWATCH
+			this.transactionMode = transactionModeNone
+		} else if bytes.Equal(commandName, protocol.MULTI_COMMAND) {
+			// Enter actual transaction mode when receiving MULTI
+			this.transactionMode = transactionModeMulti
+		}
+
+	case transactionModeMulti:
+		if bytes.Equal(commandName, protocol.EXEC_COMMAND) || bytes.Equal(commandName, protocol.DISCARD_COMMAND) {
+			// Exit transaction mode when receiving EXEC or DISCARD
+			this.transactionMode = transactionModeNone
+		}
+	}
 }

@@ -2,10 +2,6 @@
 
 The following redis commands are disabled, because they should generally be run on the actual redis server that you want information from:
 ```
-multi
-watch
-exec
-unwatch
 bgrewriteaof
 bgsave
 client
@@ -32,12 +28,14 @@ The following redis commands are disabled if multiplexing is enabled, because th
 ```
 discard
 eval
+exec
 bitop
 brpoplpush
 keys
 mget
 mset
 msetnx
+multi
 rename
 renamenx
 rpoplpush
@@ -49,6 +47,8 @@ sinter
 smove
 sunion
 sunionstore
+unwatch
+watch
 zinterstore
 zunionstore
 ```

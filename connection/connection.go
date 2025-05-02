@@ -30,16 +30,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	. "github.com/salesforce/rmux/log"
-	"github.com/salesforce/rmux/protocol"
-	. "github.com/salesforce/rmux/writer"
 	"net"
+	"rmux/graphite"
+	"rmux/log"
+	"rmux/protocol"
+	"rmux/writer"
 	"time"
-	"github.com/salesforce/rmux/graphite"
 )
 
-//An outbound connection to a redis server
-//Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
+// An outbound connection to a redis server
+// Maintains its own underlying TimedNetReadWriter, and keeps track of its DatabaseId for select() changes
 type Connection struct {
 	connection net.Conn
 	//The database that we are currently connected to
@@ -47,17 +47,17 @@ type Connection struct {
 	// The reader from the redis server
 	Reader *bufio.Reader
 	// The writer to the redis server
-	Writer *FlexibleWriter
+	Writer *writer.FlexibleWriter
 
-	protocol string
-	endpoint string
+	protocol       string
+	endpoint       string
 	connectTimeout time.Duration
-	readTimeout time.Duration
-	writeTimeout time.Duration
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
 }
 
-//Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
-//ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
+// Initializes a new connection, of the given protocol and endpoint, with the given connection timeout
+// ex: "unix", "/tmp/myAwesomeSocket", 50*time.Millisecond
 func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, WriteTimeout time.Duration) *Connection {
 	c := &Connection{}
 	c.protocol = Protocol
@@ -71,7 +71,7 @@ func NewConnection(Protocol, Endpoint string, ConnectTimeout, ReadTimeout, Write
 func (c *Connection) Disconnect() {
 	if c.connection != nil {
 		c.connection.Close()
-		Info("Disconnected a connection")
+		log.Info("Disconnected a connection")
 		graphite.Increment("disconnect")
 	}
 	c.connection = nil
@@ -90,31 +90,31 @@ func (c *Connection) ReconnectIfNecessary() (err error) {
 
 	c.connection, err = net.DialTimeout(c.protocol, c.endpoint, c.connectTimeout)
 	if err != nil {
-		Error("NewConnection: Error received from dial: %s", err)
+		log.Error("NewConnection: Error received from dial: %s", err)
 		c.connection = nil
 		return err
 	}
 
 	netReadWriter := protocol.NewTimedNetReadWriter(c.connection, c.readTimeout, c.writeTimeout)
 	c.DatabaseId = 0
-	c.Writer = NewFlexibleWriter(netReadWriter)
+	c.Writer = writer.NewFlexibleWriter(netReadWriter)
 	c.Reader = bufio.NewReader(netReadWriter)
 
 	return nil
 }
 
-//Selects the given database, for the connection
-//If an error is returned, or if an invalid response is returned from the select, then this will return an error
-//If not, the connections internal database will be updated accordingly
+// Selects the given database, for the connection
+// If an error is returned, or if an invalid response is returned from the select, then this will return an error
+// If not, the connections internal database will be updated accordingly
 func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	if this.connection == nil {
-		Error("SelectDatabase: Selecting on invalid connection")
+		log.Error("SelectDatabase: Selecting on invalid connection")
 		return errors.New("Selecting database on an invalid connection")
 	}
 
 	err = protocol.WriteLine([]byte(fmt.Sprintf("select %d", DatabaseId)), this.Writer, true)
 	if err != nil {
-		Error("SelectDatabase: Error received from protocol.FlushLine: %s", err)
+		log.Error("SelectDatabase: Error received from protocol.FlushLine: %s", err)
 		return err
 	}
 
@@ -123,7 +123,7 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 			err = errors.New("unknown ReadLine error")
 		}
 
-		Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
+		log.Error("SelectDatabase: Error while attempting to select database. Err:%q Response:%q isPrefix:%t", err, line, isPrefix)
 		this.Disconnect()
 		return errors.New("Invalid select response")
 	}
@@ -132,8 +132,8 @@ func (this *Connection) SelectDatabase(DatabaseId int) (err error) {
 	return
 }
 
-//Checks if the current connection is up or not
-//If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
+// Checks if the current connection is up or not
+// If we do not get a response, or if we do not get a PONG reply, or if there is any error, returns false
 func (myConnection *Connection) CheckConnection() bool {
 	if myConnection.connection == nil {
 		return false
@@ -147,7 +147,7 @@ func (myConnection *Connection) CheckConnection() bool {
 	startWrite := time.Now()
 	err := protocol.WriteLine(protocol.SHORT_PING_COMMAND, myConnection.Writer, true)
 	if err != nil {
-		Error("CheckConnection: Could not write PING Err:%s Timing:%s", err, time.Now().Sub(startWrite))
+		log.Error("CheckConnection: Could not write PING Err:%s Timing:%s", err, time.Now().Sub(startWrite))
 		myConnection.Disconnect()
 		return false
 	}
@@ -159,11 +159,11 @@ func (myConnection *Connection) CheckConnection() bool {
 		return true
 	} else {
 		if err != nil {
-			Error("CheckConnection: Could not read PING. Error: %s Timing:%s", err, time.Now().Sub(startRead))
+			log.Error("CheckConnection: Could not read PING. Error: %s Timing:%s", err, time.Now().Sub(startRead))
 		} else if isPrefix {
-			Error("CheckConnection: ReadLine returned prefix: %q", line)
+			log.Error("CheckConnection: ReadLine returned prefix: %q", line)
 		} else {
-			Error("CheckConnection: Expected PONG response. Got: %q", line)
+			log.Error("CheckConnection: Expected PONG response. Got: %q", line)
 		}
 		myConnection.Disconnect()
 		return false
@@ -187,12 +187,12 @@ func (c *Connection) IsConnected() bool {
 			}
 		}
 
-		Info("There was an error when checking the connection (%s), will reconnect the connection", err)
+		log.Info("There was an error when checking the connection (%s), will reconnect the connection", err)
 		return false
 	}
 
 	if n != 0 {
-		Warn("Got %d bytes back when we expected 0.", n)
+		log.Warn("Got %d bytes back when we expected 0.", n)
 	}
 
 	return true

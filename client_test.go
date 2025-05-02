@@ -29,9 +29,9 @@ package rmux
 import (
 	"bufio"
 	"bytes"
-	"github.com/salesforce/rmux/protocol"
-	"github.com/salesforce/rmux/writer"
 	"net"
+	"rmux/protocol"
+	"rmux/writer"
 	"testing"
 	"time"
 )
@@ -60,11 +60,10 @@ func TestReadCommand(t *testing.T) {
 		t.Fatal("Could not dial in to our local rmux sock")
 	}
 	defer testConnection.Close()
-	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
+	client := NewClient(testConnection, true, nil, 1*time.Millisecond)
 
 	for _, data := range testData {
 		input := bytes.NewBuffer([]byte(data.input))
-
 
 		client.Writer = writer.NewFlexibleWriter(new(bytes.Buffer))
 		client.Scanner = protocol.NewRespScanner(input)
@@ -135,7 +134,7 @@ func TestParseCommand(test *testing.T) {
 	}
 	defer testConnection.Close()
 
-	client := NewClient(testConnection, 1*time.Millisecond, 1*time.Millisecond, true, nil)
+	client := NewClient(testConnection, true, nil, 1*time.Millisecond)
 
 	for _, testCase := range testCases {
 		w := new(bytes.Buffer)
@@ -165,4 +164,3 @@ func TestParseCommand(test *testing.T) {
 		}
 	}
 }
-

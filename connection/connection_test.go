@@ -29,8 +29,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/salesforce/rmux/writer"
 	"net"
+	"rmux/writer"
 	"testing"
 	"time"
 )
