@@ -15,6 +15,8 @@ Configuration can be handled either via command-line arguments or via config fil
   -remoteReadTimeout=0: Timeout to set for remote redises (read)
   -remoteTimeout=0: Timeout to set for remote redises (connect+read+write)
   -remoteWriteTimeout=0: Timeout to set for remote redises (write)
+  -remoteReconnectInterval=0: Interval in which connected redis connections will be forced to reconnect in minutes
+  -remoteDiagnosticCheckInterval=0: Interval to check the diagnostic connection in seconds
   -socket="": The socket to listen for incoming connections on.  If this is provided, host and port are ignored
   -tcpConnections="localhost:6380 localhost:6381": TCP connections (destination redis servers) to multiplex over
   -unixConnections="": Unix connections (destination redis servers) to multiplex over
@@ -42,7 +44,9 @@ for the configuration json is as follows:
     "remoteTimeout": int,
     "remoteReadTimeout": int,
     "remoteWriteTimeout": int,
-    "remoteConnectTimeout": int
+    "remoteConnectTimeout": int,
+    "remoteReconnectInterval": int,
+    "remoteDiagnosticCheckInterval": int
   },
   ...
 ]

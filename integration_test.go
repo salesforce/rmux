@@ -1,4 +1,4 @@
-// +build integration
+//go:build integration
 
 /*
  * Copyright (c) 2015, Salesforce.com, Inc.
@@ -29,12 +29,12 @@ package rmux
 
 import (
 	"bytes"
+	"io"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
-	"strconv"
-	"io"
 )
 
 type tRmux struct {
@@ -239,10 +239,9 @@ func TestLargeResponseWithValidation(t *testing.T) {
 
 func TestLargeRequest(t *testing.T) {
 	// The data to set: 26 bytes * 3000 = 78000 bytes
-	setData := strings.Repeat("abcdefghijklmnopqrstuvwxyz", 3000);
+	setData := strings.Repeat("abcdefghijklmnopqrstuvwxyz", 3000)
 	cmd := makeCommand("set somekey " + setData)
 	expected := "+OK\r\n"
 
 	checkResponse(t, cmd, expected)
 }
-

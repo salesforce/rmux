@@ -1,4 +1,4 @@
-// +build !dev
+//go:build !dev
 
 /*
  * Copyright (c) 2015, Salesforce.com, Inc.

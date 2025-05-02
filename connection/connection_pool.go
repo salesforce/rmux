@@ -26,12 +26,13 @@
 package connection
 
 import (
-	. "github.com/salesforce/rmux/log"
-	"time"
-	"sync/atomic"
-	"github.com/salesforce/rmux/graphite"
+	"errors"
+	"rmux/graphite"
+	"rmux/log"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
@@ -41,9 +42,11 @@ const (
 	EXTERN_READ_TIMEOUT = time.Millisecond * 500
 	//Default write timeout, for connection pools.  Can be adjusted on individual pools after initialization
 	EXTERN_WRITE_TIMEOUT = time.Millisecond * 500
+	// Default reconnect interval, for connection pools. Can be adjusted on individual pools after initialization
+	EXTERN_RECONNECT_INTERVAL = time.Hour * 24
 )
 
-//A pool of connections to a single outbound redis server
+// A pool of connections to a single outbound redis server
 type ConnectionPool struct {
 	//The protocol to use for our connections (unix/tcp/udp)
 	Protocol string
@@ -55,22 +58,25 @@ type ConnectionPool struct {
 	ReadTimeout time.Duration
 	//An overridable write timeout.  Defaults to EXTERN_WRITE_TIMEOUT
 	WriteTimeout time.Duration
+	//An overridable reconnection interval. Defaults to EXTERN_RECONNECT_INTERVAL
+	ReconnectInterval time.Duration
 	//channel of recycled connections, for re-use
 	connectionPool chan *Connection
 	// The connection used for diagnostics (like checking that the pool is up)
-	diagnosticConnection *Connection
+	diagnosticConnection     *Connection
 	diagnosticConnectionLock sync.Mutex
 	// Number of active connections
-	Count int32
+	Count         int32
 	connectedLock sync.RWMutex
 	// Whether or not the connction pool is up or down
 	isConnected bool
 }
 
-//Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
-//ex: "unix", "/tmp/myAwesomeSocket", 5
+// Initialize a new connection pool, for the given protocol/endpoint, with a given pool capacity
+// ex: "unix", "/tmp/myAwesomeSocket", 5
 func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeout time.Duration,
-		readTimeout time.Duration, writeTimeout time.Duration) (newConnectionPool *ConnectionPool) {
+	readTimeout time.Duration, writeTimeout time.Duration,
+	reconnectInterval time.Duration) (newConnectionPool *ConnectionPool) {
 	newConnectionPool = &ConnectionPool{}
 	newConnectionPool.Protocol = Protocol
 	newConnectionPool.Endpoint = Endpoint
@@ -78,6 +84,7 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeo
 	newConnectionPool.ConnectTimeout = connectTimeout
 	newConnectionPool.ReadTimeout = readTimeout
 	newConnectionPool.WriteTimeout = writeTimeout
+	newConnectionPool.ReconnectInterval = reconnectInterval
 	newConnectionPool.Count = 0
 
 	// Fill the pool with as many handlers as it asks for
@@ -90,7 +97,7 @@ func NewConnectionPool(Protocol, Endpoint string, poolCapacity int, connectTimeo
 	return
 }
 
-//Gets a connection from the connection pool
+// Gets a connection from the connection pool
 func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 	select {
 	case connection = <-cp.connectionPool:
@@ -99,13 +106,14 @@ func (cp *ConnectionPool) GetConnection() (connection *Connection, err error) {
 		if err := connection.ReconnectIfNecessary(); err != nil {
 			// Recycle the holder, return an error
 			cp.RecycleRemoteConnection(connection)
-			Error("Received a nil connection in pool.GetConnection: %s", err)
-			graphite.Increment("reconnect_error");
+			log.Error("Received a nil connection in pool.GetConnection: %s", err)
+			graphite.Increment("reconnect_error")
 			return nil, err
 		}
 
 		return connection, nil
-	// TODO: Maybe a while/timeout/graphiteping loop?
+	case <-time.After(1 * time.Second):
+		return nil, errors.New("timeout while waiting for a new connection")
 	}
 }
 
@@ -117,6 +125,7 @@ func (cp *ConnectionPool) CreateConnection() *Connection {
 		cp.ConnectTimeout,
 		cp.ReadTimeout,
 		cp.WriteTimeout,
+		cp.ReconnectInterval,
 	)
 }
 
@@ -124,7 +133,7 @@ func (cp *ConnectionPool) getDiagnosticConnection() (connection *Connection, err
 	cp.diagnosticConnectionLock.Lock()
 
 	if err := cp.diagnosticConnection.ReconnectIfNecessary(); err != nil {
-		Error("The diangnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
+		log.Error("The diagnostic connection is down for %s:%s : %s", cp.Protocol, cp.Endpoint, err)
 		cp.diagnosticConnectionLock.Unlock()
 		return nil, err
 	}
@@ -136,8 +145,8 @@ func (cp *ConnectionPool) releaseDiagnosticConnection() {
 	cp.diagnosticConnectionLock.Unlock()
 }
 
-//Recycles a connection back into our connection pool
-//If the pool is full, throws it away
+// Recycles a connection back into our connection pool
+// If the pool is full, throws it away
 func (myConnectionPool *ConnectionPool) RecycleRemoteConnection(remoteConnection *Connection) {
 	myConnectionPool.connectionPool <- remoteConnection
 	atomic.AddInt32(&myConnectionPool.Count, -1)
@@ -155,8 +164,9 @@ func (cp *ConnectionPool) IsConnected() bool {
 	return cp.isConnected
 }
 
-//Checks the state of connections in this connection pool
-//If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
+// Checks the state of connections in this connection pool
+// If a remote server has severe lag, mysteriously goes away, or stops responding all-together, returns false
+// This is only used for diagnostic connections!
 func (cp *ConnectionPool) CheckConnectionState() (isUp bool) {
 	isUp = true
 	defer func() {
@@ -169,12 +179,6 @@ func (cp *ConnectionPool) CheckConnectionState() (isUp bool) {
 		return
 	}
 	defer cp.releaseDiagnosticConnection()
-
-	//If we failed to bind, or if our PING fails, the pool is down
-	if connection == nil || connection.connection == nil  {
-		isUp = false
-		return
-	}
 
 	if !connection.CheckConnection() {
 		connection.Disconnect()
@@ -189,5 +193,5 @@ func (cp *ConnectionPool) ReportGraphite() {
 	endpoint := strings.Replace(cp.Endpoint, ".", "-", -1)
 	endpoint = strings.Replace(cp.Endpoint, ":", "-", -1)
 
-	graphite.Gauge("pools." + endpoint, int(cp.Count))
+	graphite.Gauge("pools."+endpoint, int(cp.Count))
 }
