@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-//A ReadWriter for a NetConnection's read/writer, that allows for sane & reliable timeouts applied to all of its operations
+// A ReadWriter for a NetConnection's read/writer, that allows for sane & reliable timeouts applied to all of its operations
 type TimedNetReadWriter struct {
 	//The underlying connection used by our remote (redis) connection
 	NetConnection net.Conn
@@ -40,7 +40,7 @@ type TimedNetReadWriter struct {
 	WriteTimeout time.Duration
 }
 
-//Wraps the net.connection's write function with a WriteDeadline
+// Wraps the net.connection's write function with a WriteDeadline
 func (myReadWriter *TimedNetReadWriter) Write(line []byte) (n int, err error) {
 	if myReadWriter.WriteTimeout > 0 {
 		myReadWriter.NetConnection.SetWriteDeadline(time.Now().Add(myReadWriter.WriteTimeout))
@@ -50,7 +50,7 @@ func (myReadWriter *TimedNetReadWriter) Write(line []byte) (n int, err error) {
 	return
 }
 
-//Wraps the net.connection's read function with a ReadDeadline
+// Wraps the net.connection's read function with a ReadDeadline
 func (myReadWriter *TimedNetReadWriter) Read(line []byte) (n int, err error) {
 	if myReadWriter.ReadTimeout > 0 {
 		myReadWriter.NetConnection.SetReadDeadline(time.Now().Add(myReadWriter.ReadTimeout))
@@ -60,7 +60,7 @@ func (myReadWriter *TimedNetReadWriter) Read(line []byte) (n int, err error) {
 	return
 }
 
-//Initializes a TimedNetReadWriter, with the given timeouts
+// Initializes a TimedNetReadWriter, with the given timeouts
 func NewTimedNetReadWriter(connection net.Conn, readTimeout, writeTimeout time.Duration) (newReadWriter *TimedNetReadWriter) {
 	newReadWriter = &TimedNetReadWriter{connection, readTimeout, writeTimeout}
 	return

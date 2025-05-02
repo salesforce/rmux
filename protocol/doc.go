@@ -23,7 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-//Package rmux/protocol provides a standard way to listen in on the redis protocol,
-//look ahead to what commands are about to be executed, and ignore them or pass them
-//on to another buffer, as desired
+// Package rmux/protocol provides a standard way to listen in on the redis protocol,
+// look ahead to what commands are about to be executed, and ignore them or pass them
+// on to another buffer, as desired
 package protocol

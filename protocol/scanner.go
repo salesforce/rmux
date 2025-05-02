@@ -34,8 +34,8 @@ import (
 type RespScanner struct {
 	r     io.Reader
 	token []byte
-	tmp [2048]byte // temp read buffer
-	b *bytes.Buffer
+	tmp   [2048]byte // temp read buffer
+	b     *bytes.Buffer
 	err   error
 
 	empties int
